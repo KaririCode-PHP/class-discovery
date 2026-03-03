@@ -6,8 +6,10 @@ namespace KaririCode\ClassDiscovery\Tests\Unit\Filter;
 
 use KaririCode\ClassDiscovery\Filter\NamespaceFilter;
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(NamespaceFilter::class)]
 final class NamespaceFilterTest extends TestCase
 {
     use MetadataFactory;

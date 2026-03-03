@@ -7,8 +7,10 @@ namespace KaririCode\ClassDiscovery\Tests\Unit\Cache;
 use KaririCode\ClassDiscovery\Cache\{ChainCacheStrategy, MemoryCacheStrategy};
 use KaririCode\ClassDiscovery\Result\DiscoveryResult;
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(ChainCacheStrategy::class)]
 final class ChainCacheStrategyTest extends TestCase
 {
     use MetadataFactory;

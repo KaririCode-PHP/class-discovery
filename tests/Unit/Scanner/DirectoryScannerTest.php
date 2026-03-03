@@ -8,12 +8,22 @@ use KaririCode\ClassDiscovery\Contract\CacheStrategy;
 use KaririCode\ClassDiscovery\Contract\ClassFilter;
 use KaririCode\ClassDiscovery\Contract\DiscoveryResult;
 use KaririCode\ClassDiscovery\Contract\NamespaceResolver;
+use KaririCode\ClassDiscovery\Exception\DiscoveryException;
+use KaririCode\ClassDiscovery\Result\ClassMetadata;
+use KaririCode\ClassDiscovery\Result\DiscoveryResult as ConcreteDiscoveryResult;
 use KaririCode\ClassDiscovery\Scanner\DirectoryScanner;
+use KaririCode\ClassDiscovery\Scanner\FileScanner;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(DirectoryScanner::class)]
+#[UsesClass(FileScanner::class)]
+#[UsesClass(ConcreteDiscoveryResult::class)]
+#[UsesClass(ClassMetadata::class)]
+#[UsesClass(DiscoveryException::class)]
+
 final class DirectoryScannerTest extends TestCase
 {
     private string $fixtureDir;
