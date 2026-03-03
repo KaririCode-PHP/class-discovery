@@ -7,8 +7,10 @@ namespace KaririCode\ClassDiscovery\Tests\Integration;
 use KaririCode\ClassDiscovery\Contract\NamespaceResolver;
 use KaririCode\ClassDiscovery\Exception\DiscoveryException;
 use KaririCode\ClassDiscovery\Scanner\DirectoryScanner;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(DirectoryScanner::class)]
 final class DirectoryScannerIntegrationTest extends TestCase
 {
     private string $fixtureDir;

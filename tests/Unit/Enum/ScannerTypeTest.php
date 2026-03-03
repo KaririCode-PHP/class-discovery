@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace KaririCode\ClassDiscovery\Tests\Unit\Enum;
 
 use KaririCode\ClassDiscovery\Enum\ScannerType;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(ScannerType::class)]
 final class ScannerTypeTest extends TestCase
 {
     public function testIsPureEnum(): void

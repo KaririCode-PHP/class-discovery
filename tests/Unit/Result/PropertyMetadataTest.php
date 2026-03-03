@@ -7,8 +7,10 @@ namespace KaririCode\ClassDiscovery\Tests\Unit\Result;
 use KaririCode\ClassDiscovery\Enum\AttributeTarget;
 use KaririCode\ClassDiscovery\Result\{PropertyMetadata};
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(PropertyMetadata::class)]
 final class PropertyMetadataTest extends TestCase
 {
     use MetadataFactory;

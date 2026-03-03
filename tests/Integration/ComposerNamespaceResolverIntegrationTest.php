@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace KaririCode\ClassDiscovery\Tests\Integration;
 
 use KaririCode\ClassDiscovery\Scanner\ComposerNamespaceResolver;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(ComposerNamespaceResolver::class)]
 final class ComposerNamespaceResolverIntegrationTest extends TestCase
 {
     private string $projectRoot;

@@ -6,8 +6,10 @@ namespace KaririCode\ClassDiscovery\Tests\Unit\Result;
 
 use KaririCode\ClassDiscovery\Result\ClassMetadata;
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(ClassMetadata::class)]
 final class ClassMetadataTest extends TestCase
 {
     use MetadataFactory;

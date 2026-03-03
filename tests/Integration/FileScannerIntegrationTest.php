@@ -9,8 +9,10 @@ use KaririCode\ClassDiscovery\Contract\NamespaceResolver;
 use KaririCode\ClassDiscovery\Exception\DiscoveryException;
 use KaririCode\ClassDiscovery\Filter\{StructuralFilter};
 use KaririCode\ClassDiscovery\Scanner\FileScanner;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(FileScanner::class)]
 final class FileScannerIntegrationTest extends TestCase
 {
     private string $fixtureDir;

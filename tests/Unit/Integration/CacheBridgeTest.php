@@ -7,8 +7,10 @@ namespace KaririCode\ClassDiscovery\Tests\Unit\Integration;
 use KaririCode\ClassDiscovery\Integration\CacheBridge;
 use KaririCode\ClassDiscovery\Result\DiscoveryResult;
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(CacheBridge::class)]
 final class CacheBridgeTest extends TestCase
 {
     use MetadataFactory;

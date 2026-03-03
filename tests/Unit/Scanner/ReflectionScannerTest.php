@@ -9,15 +9,29 @@ use KaririCode\ClassDiscovery\Contract\ClassFilter;
 use KaririCode\ClassDiscovery\Contract\DiscoveryResult;
 use KaririCode\ClassDiscovery\Contract\NamespaceResolver;
 use KaririCode\ClassDiscovery\Filter\StructuralFilter;
+use KaririCode\ClassDiscovery\Result\AttributeMetadata;
+use KaririCode\ClassDiscovery\Result\ClassMetadata;
+use KaririCode\ClassDiscovery\Result\DiscoveryResult as ConcreteDiscoveryResult;
+use KaririCode\ClassDiscovery\Result\MethodMetadata;
+use KaririCode\ClassDiscovery\Result\PropertyMetadata;
+use KaririCode\ClassDiscovery\Scanner\FileScanner;
 use KaririCode\ClassDiscovery\Scanner\ReflectionScanner;
 use KaririCode\ClassDiscovery\Tests\Fixture\SampleAttribute;
 use KaririCode\ClassDiscovery\Tests\Fixture\SampleClass;
 use KaririCode\ClassDiscovery\Tests\Fixture\SampleInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ReflectionScanner::class)]
+#[UsesClass(FileScanner::class)]
+#[UsesClass(ConcreteDiscoveryResult::class)]
+#[UsesClass(ClassMetadata::class)]
+#[UsesClass(MethodMetadata::class)]
+#[UsesClass(PropertyMetadata::class)]
+#[UsesClass(AttributeMetadata::class)]
+#[UsesClass(StructuralFilter::class)]
 final class ReflectionScannerTest extends TestCase
 {
     private string $fixtureDir;

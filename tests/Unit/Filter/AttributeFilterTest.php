@@ -8,8 +8,10 @@ use KaririCode\ClassDiscovery\Enum\AttributeTarget;
 use KaririCode\ClassDiscovery\Filter\AttributeFilter;
 use KaririCode\ClassDiscovery\Result\{AttributeMetadata, MethodMetadata, PropertyMetadata};
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(AttributeFilter::class)]
 final class AttributeFilterTest extends TestCase
 {
     use MetadataFactory;
