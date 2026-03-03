@@ -6,6 +6,12 @@ namespace KaririCode\ClassDiscovery\Tests\Fixture;
 
 use Attribute;
 
+/**
+ * Sample class-level PHP attribute for testing the attribute scanner.
+ *
+ * @package KaririCode\ClassDiscovery\Tests\Fixture
+ * @since   3.0.0
+ */
 #[Attribute(Attribute::TARGET_CLASS)]
 final class SampleAttribute
 {
@@ -13,14 +19,4 @@ final class SampleAttribute
         public readonly string $name = '',
     ) {
     }
-}
-
-#[Attribute(Attribute::TARGET_METHOD)]
-final class MethodAttribute
-{
-}
-
-#[Attribute(Attribute::TARGET_PROPERTY)]
-final class PropertyAttribute
-{
 }

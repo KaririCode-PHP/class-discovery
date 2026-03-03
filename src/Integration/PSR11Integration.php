@@ -25,6 +25,11 @@ use KaririCode\ClassDiscovery\Scanner\{
  * $container->singleton(AttributeScanner::class, fn () => PSR11Integration::createAttributeScanner());
  * $container->singleton(DependencyAnalyzer::class, fn () => new DependencyAnalyzer());
  * ```
+ *
+ * @package KaririCode\ClassDiscovery\Integration
+ * @author  Walmir Silva <walmir.silva@kariricode.org>
+ * @license MIT
+ * @since   3.1.0
  */
 final readonly class PSR11Integration
 {

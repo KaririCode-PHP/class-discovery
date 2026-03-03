@@ -12,11 +12,16 @@ use KaririCode\ClassDiscovery\Contract\DiscoveryResult;
  *
  * Typical configuration: Memory (L1) → File (L2).
  * On L1 miss + L2 hit, result is promoted to L1.
+ *
+ * @package KaririCode\ClassDiscovery\Cache
+ * @author  Walmir Silva <walmir.silva@kariricode.org>
+ * @license MIT
+ * @since   3.0.0
  */
-final class ChainCacheStrategy implements CacheStrategy
+final readonly class ChainCacheStrategy implements CacheStrategy
 {
     /** @var array<CacheStrategy> */
-    private readonly array $tiers;
+    private array $tiers;
 
     public function __construct(CacheStrategy ...$tiers)
     {

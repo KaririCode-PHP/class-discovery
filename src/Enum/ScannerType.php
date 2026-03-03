@@ -8,6 +8,11 @@ namespace KaririCode\ClassDiscovery\Enum;
  * Scanner strategy classification.
  *
  * Pure enum: no external representation required.
+ *
+ * @package KaririCode\ClassDiscovery\Enum
+ * @author  Walmir Silva <walmir.silva@kariricode.org>
+ * @license MIT
+ * @since   3.0.0
  */
 enum ScannerType
 {

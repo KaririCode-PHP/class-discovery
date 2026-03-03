@@ -13,8 +13,13 @@ use KaririCode\ClassDiscovery\Exception\DiscoveryException;
  *
  * OPcache-friendly when using var_export format. Production-grade
  * with atomic writes (write to temp, rename) to prevent corruption.
+ *
+ * @package KaririCode\ClassDiscovery\Cache
+ * @author  Walmir Silva <walmir.silva@kariricode.org>
+ * @license MIT
+ * @since   3.0.0
  */
-final class FileCacheStrategy implements CacheStrategy
+final readonly class FileCacheStrategy implements CacheStrategy
 {
     public function __construct(
         private readonly string $cacheDirectory,

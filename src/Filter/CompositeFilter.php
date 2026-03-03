@@ -12,13 +12,18 @@ use KaririCode\ClassDiscovery\Result\ClassMetadata;
  *
  * Use static factories: CompositeFilter::any(...) for OR-logic,
  * CompositeFilter::all(...) for AND-logic.
+ *
+ * @package KaririCode\ClassDiscovery\Filter
+ * @author  Walmir Silva <walmir.silva@kariricode.org>
+ * @license MIT
+ * @since   3.0.0
  */
-final class CompositeFilter implements ClassFilter
+final readonly class CompositeFilter implements ClassFilter
 {
     /** @var list<ClassFilter> */
-    private readonly array $filters;
+    private array $filters;
 
-    private readonly bool $requireAll;
+    private bool $requireAll;
 
     /**
      * @param list<ClassFilter> $filters
