@@ -3,18 +3,26 @@
 [![PHP Version](https://img.shields.io/badge/php-%3E%3D8.4-blue)](https://php.net)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-222%20passing-brightgreen)]()
+[![Coverage](https://img.shields.io/badge/coverage-95.44%25-green)]()
+[![Quality](https://img.shields.io/badge/quality-cs--fixer%20%7C%20phpstan%20%7C%20psalm-blue)]()
 
-PHP 8.4+ class discovery component with token-based scanning, attribute discovery, multi-tier caching, and dependency analysis. Part of the [KaririCode Framework](https://kariricode.org) ecosystem.
+> **PHP 8.4+ class discovery** — token-based scanning, attribute-driven automation, multi-tier caching and circular dependency detection.  
+> Part of the [KaririCode Framework](https://kariricode.org). Zero external dependencies.
 
-## Features
+---
 
-- **Token-based scanning** — discovers classes without loading or executing them (`token_get_all`)
-- **Attribute discovery** — finds PHP 8+ attributes at class, method, property, parameter, and constant level
-- **Multi-tier caching** — Memory (L1) → File (L2) with automatic promotion on miss
-- **Circular dependency detection** — DFS-based cycle detection with formatted reporting
-- **Security** — path traversal prevention, symlink containment, configurable resource limits
-- **Zero external dependencies** — PHP 8.4+ standard library only
-- **Immutable results** — all result objects are `final readonly` (ARFA 1.3 P1)
+## Why kariricode/class-discovery?
+
+Modern PHP applications rely heavily on **convention-over-configuration** — routes auto-registered from `#[Route]`, services injected from `#[Service]`, event listeners wired from `#[EventListener]`. This library is the **engine** behind that automation: it scans your codebase, reads PHP attributes, and returns rich metadata that your framework components can act on — without ever loading or executing the discovered classes.
+
+Key decisions:
+- **Token-based parsing** (`token_get_all`) — never triggers autoloading or class execution
+- **Immutable results** — all result objects are `final readonly`, safe to cache and share
+- **Composable filters** — combine `AttributeFilter`, `InterfaceFilter`, `NamespaceFilter`, `StructuralFilter` with AND/OR logic
+- **Zero dependencies** — works in any PHP 8.4 project, no framework required
+
+---
 
 ## Installation
 
@@ -22,53 +30,193 @@ PHP 8.4+ class discovery component with token-based scanning, attribute discover
 composer require kariricode/class-discovery
 ```
 
-**Requirements:** PHP 8.4+
-
 **Optional integrations:**
 
 ```bash
-composer require kariricode/cache          # PSR-16 cache backend
-composer require kariricode/configurator   # Environment-aware configuration
-composer require kariricode/dependency-injection  # PSR-11 container
+composer require kariricode/cache                   # PSR-16 cache backend
+composer require kariricode/configurator            # Environment-aware config
+composer require kariricode/dependency-injection    # PSR-11 container
 ```
 
-## Quick Start
+---
 
-### Discover all classes in a directory
+## Real-world Use Cases
+
+### 1. HTTP Router — auto-register controllers from `#[Route]`
+
+Discover all classes and methods annotated with `#[Route]` without manually listing routes in a config file.
 
 ```php
-use KaririCode\ClassDiscovery\Scanner\{FileScanner, ComposerNamespaceResolver};
+use KaririCode\ClassDiscovery\Filter\AttributeFilter;
+use KaririCode\ClassDiscovery\Scanner\{ComposerNamespaceResolver, FileScanner};
 
-$resolver = new ComposerNamespaceResolver();
-$scanner = new FileScanner($resolver);
-
-$result = $scanner->scan(['src/']);
-
-foreach ($result as $fqcn => $metadata) {
-    echo "{$fqcn} — {$metadata->filePath}\n";
+#[\Attribute(\Attribute::TARGET_CLASS | \Attribute::TARGET_METHOD)]
+final readonly class Route
+{
+    public function __construct(
+        public readonly string $path,
+        public readonly string $method = 'GET',
+    ) {}
 }
 
-echo "Found {$result->count()} classes in {$result->getScanDuration()}s\n";
+// ── Discovery ─────────────────────────────────────────────────────
+$scanner = new FileScanner(new ComposerNamespaceResolver());
+$scanner->addFilter(new AttributeFilter(Route::class));
+
+$result = $scanner->scan(['src/Controller']);
+
+foreach ($result as $fqcn => $metadata) {
+    // Class-level route
+    if ($metadata->hasAttribute('Route')) {
+        $router->mount($fqcn);
+    }
+
+    // Method-level routes (use ReflectionScanner for attribute arg values)
+    foreach ($metadata->methods as $method) {
+        if ($method->hasAttribute('Route')) {
+            echo "  route: {$fqcn}::{$method->name}\n";
+        }
+    }
+}
 ```
 
-### Discover classes by attribute
+---
+
+### 2. DI Container — auto-register services from `#[Service]`
+
+Eliminate manual service registration. Scan once at boot and populate your container automatically.
 
 ```php
-use KaririCode\ClassDiscovery\Scanner\{AttributeScanner, ComposerNamespaceResolver};
+use KaririCode\ClassDiscovery\Filter\AttributeFilter;
+use KaririCode\ClassDiscovery\Scanner\{ComposerNamespaceResolver, FileScanner};
+use KaririCode\ClassDiscovery\Cache\{ChainCacheStrategy, FileCacheStrategy, MemoryCacheStrategy};
 
-$scanner = new AttributeScanner(new ComposerNamespaceResolver());
-
-// Single attribute
-$controllers = $scanner->scanForAttribute(Route::class, ['src/']);
-
-// Multiple attributes (OR logic)
-$components = $scanner->scanForAttributes(
-    [Route::class, Command::class, EventListener::class],
-    ['src/'],
+// Multi-tier cache: Memory (L1) → File (L2)
+$cache = new ChainCacheStrategy(
+    new MemoryCacheStrategy(),
+    new FileCacheStrategy('/var/cache/discovery'),
 );
+
+$scanner = new FileScanner(new ComposerNamespaceResolver());
+$scanner->addFilter(new AttributeFilter(Service::class));
+$scanner->setCacheStrategy($cache);  // cold: ~60ms, warm: <2ms
+
+$result = $scanner->scan(['src/Service', 'src/Repository']);
+
+foreach ($result as $fqcn => $metadata) {
+    // Register every discovered class in the DI container
+    $container->bind($fqcn, $fqcn);
+}
 ```
 
-### Filter results
+---
+
+### 3. Event Dispatcher — auto-wire listeners from `#[EventListener]`
+
+Discover and register all event listeners without a YAML/XML mapping file.
+
+```php
+use KaririCode\ClassDiscovery\Scanner\{ComposerNamespaceResolver, ReflectionScanner};
+use KaririCode\ClassDiscovery\Filter\AttributeFilter;
+
+// ReflectionScanner reads actual attribute constructor values
+$scanner = new ReflectionScanner(new ComposerNamespaceResolver());
+$scanner->addFilter(new AttributeFilter(EventListener::class));
+
+$result = $scanner->scan(['src/Listener']);
+
+foreach ($result as $fqcn => $metadata) {
+    foreach ($metadata->attributes as $attrMeta) {
+        if ($attrMeta->instance instanceof EventListener) {
+            $dispatcher->listen(
+                event   : $attrMeta->instance->event,
+                listener: $fqcn,
+                priority: $attrMeta->instance->priority,
+            );
+        }
+    }
+}
+```
+
+---
+
+### 4. Plugin System — discover extensions by interface
+
+Find all classes implementing a specific interface across dynamically loaded modules.
+
+```php
+use KaririCode\ClassDiscovery\Filter\InterfaceFilter;
+use KaririCode\ClassDiscovery\Scanner\{ComposerNamespaceResolver, FileScanner};
+
+$scanner = new FileScanner(new ComposerNamespaceResolver());
+$scanner->addFilter(new InterfaceFilter(PaymentGatewayInterface::class));
+
+$result = $scanner->scan(['plugins/']);  // scan dynamically loaded plugin dirs
+
+foreach ($result as $fqcn => $metadata) {
+    $registry->register(new $fqcn());
+}
+```
+
+---
+
+### 5. Refactoring Guard — detect circular dependencies
+
+Catch dependency cycles before they reach production.
+
+```php
+use KaririCode\ClassDiscovery\Analyzer\{CircularDetector, DependencyAnalyzer};
+use KaririCode\ClassDiscovery\Scanner\{ComposerNamespaceResolver, FileScanner};
+
+$scanner  = new FileScanner(new ComposerNamespaceResolver());
+$result   = $scanner->scan(['src/']);
+
+$detector = new CircularDetector(
+    new DependencyAnalyzer(),
+    throwOnDetection: true,  // throws DiscoveryException::circularDependency()
+);
+
+$cycles = $detector->check($result);
+// Returns: [['App\A', 'App\B', 'App\C', 'App\A']]
+```
+
+---
+
+### 6. Console Command Auto-registration
+
+Discover all `#[Command]` annotated classes for a CLI application.
+
+```php
+use KaririCode\ClassDiscovery\Filter\{AttributeFilter, NamespaceFilter};
+use KaririCode\ClassDiscovery\Scanner\{ComposerNamespaceResolver, FileScanner};
+
+$scanner = new FileScanner(new ComposerNamespaceResolver());
+$scanner->addFilter(new AttributeFilter(Command::class));
+$scanner->addFilter(new NamespaceFilter('App\\Console\\Command'));
+
+$result = $scanner->scan(['src/Console']);
+
+foreach ($result as $fqcn => $metadata) {
+    $application->add(new $fqcn());
+}
+```
+
+---
+
+## Scanner Comparison
+
+| Scanner | Parser | Loads Classes | Performance* | Best For |
+|---|---|---|---|---|
+| `FileScanner` | `token_get_all` | ❌ Never | 30–80ms cold / <3ms warm | General listing, attribute names |
+| `AttributeScanner` | `FileScanner` + filter | ❌ Never | 50–100ms cold / <5ms warm | Attribute-driven discovery |
+| `DirectoryScanner` | `FileScanner` + constraints | ❌ Never | dep. on I/O | Depth/pattern-bounded scan |
+| `ReflectionScanner` | `ReflectionClass` | ✅ Required | 300–800ms | Full attribute argument values |
+
+*per 1,000 classes — with `FileCacheStrategy` warm scans are typically **5–10× faster**
+
+---
+
+## Filters (Composable)
 
 ```php
 use KaririCode\ClassDiscovery\Filter\{
@@ -79,24 +227,24 @@ use KaririCode\ClassDiscovery\Filter\{
     CompositeFilter,
 };
 
-// By interface
-$scanner->addFilter(new InterfaceFilter(MessageHandlerInterface::class));
+// Match classes that implement an interface AND are in a namespace
+$scanner->addFilter(new InterfaceFilter(HandlerInterface::class));
+$scanner->addFilter(new NamespaceFilter('App\\Handler'));
 
-// By namespace prefix
-$scanner->addFilter(new NamespaceFilter('App\\Controller'));
-
-// By structural characteristics
-$scanner->addFilter(new StructuralFilter(isFinal: true, isReadonly: true));
-
-// Composite: any filter passes (OR logic)
+// OR-logic: match by attribute OR by interface (composite)
 $scanner->addFilter(new CompositeFilter(
-    requireAll: false,
+    requireAll: false,                              // OR mode
     new AttributeFilter(Route::class),
     new InterfaceFilter(ControllerInterface::class),
 ));
+
+// Structural: only abstract, non-readonly classes
+$scanner->addFilter(new StructuralFilter(isAbstract: true, isReadonly: false));
 ```
 
-### Enable caching
+---
+
+## Caching
 
 ```php
 use KaririCode\ClassDiscovery\Cache\{
@@ -105,84 +253,45 @@ use KaririCode\ClassDiscovery\Cache\{
     MemoryCacheStrategy,
 };
 
-// Multi-tier: Memory (L1) → File (L2)
+// L1: in-memory (process lifetime)
+// L2: file-based (cross-request, atomic writes)
 $cache = new ChainCacheStrategy(
-    new MemoryCacheStrategy(),
-    new FileCacheStrategy('/tmp/discovery_cache'),
+    new MemoryCacheStrategy(defaultTtl: 60),
+    new FileCacheStrategy('/var/cache/discovery', defaultTtl: 3600),
 );
 
 $scanner->setCacheStrategy($cache);
-
-// First scan: ~80ms (cold), subsequent: <5ms (warm)
-$result = $scanner->scan(['src/']);
+$result = $scanner->scan(['src/']);  // cold: filesystem; warm: <2ms from memory
 ```
 
-### Detect circular dependencies
+---
 
-```php
-use KaririCode\ClassDiscovery\Analyzer\{DependencyAnalyzer, CircularDetector};
-
-$detector = new CircularDetector(
-    new DependencyAnalyzer(),
-    throwOnDetection: true,  // throws DiscoveryException on cycle
-);
-
-$cycles = $detector->check($result);
-// [['App\A', 'App\B', 'App\C', 'App\A']]
-```
-
-### Directory scanner with constraints
-
-```php
-use KaririCode\ClassDiscovery\Scanner\{DirectoryScanner, ComposerNamespaceResolver};
-
-$scanner = new DirectoryScanner(new ComposerNamespaceResolver());
-
-$result = $scanner
-    ->setMaxDepth(5)
-    ->setPattern('*Controller.php')
-    ->setFollowSymlinks(false)
-    ->scan(['src/']);
-```
-
-### PSR-11 container registration
+## PSR-11 Container Registration
 
 ```php
 use KaririCode\ClassDiscovery\Integration\PSR11Integration;
 use KaririCode\ClassDiscovery\Contract\{Scanner, AttributeScanner};
 
-// Register in any PSR-11 container
-$container->singleton(Scanner::class, fn () => PSR11Integration::createDefaultScanner($cache));
-$container->singleton(AttributeScanner::class, fn () => PSR11Integration::createAttributeScanner($cache));
+$container->singleton(
+    Scanner::class,
+    fn () => PSR11Integration::createDefaultScanner($cache),
+);
+
+$container->singleton(
+    AttributeScanner::class,
+    fn () => PSR11Integration::createAttributeScanner($cache),
+);
 ```
 
-## Scanner Strategies
-
-| Scanner | Mechanism | Class Loading | Performance (1k classes) | Use Case |
-|---|---|---|---|---|
-| `FileScanner` | `token_get_all()` | Never | 30-80ms cold, <3ms warm | General class listing |
-| `AttributeScanner` | FileScanner + filter | Never | 50-100ms cold, <5ms warm | Attribute discovery |
-| `DirectoryScanner` | FileScanner + constraints | Never | 200-500ms (I/O bound) | Depth/pattern-limited scan |
-| `ReflectionScanner` | `ReflectionClass` | Required | 300-800ms | Rich metadata (resolved attribute args) |
-
-## Ecosystem Integration
-
-| Component | Discovered Attributes |
-|---|---|
-| `kariricode/router` | `#[Route]`, `#[Middleware]`, `#[Guard]` |
-| `kariricode/console` | `#[Command]`, `#[Argument]`, `#[Option]` |
-| `kariricode/dependency-injection` | `#[Singleton]`, `#[Scoped]`, `#[Tagged]` |
-| `kariricode/event-dispatcher` | `#[EventListener]`, `#[EventSubscriber]` |
-| `kariricode/websocket` | `#[WebSocketRoute]`, `#[OnConnect]`, `#[OnMessage]` |
-| `kariricode/i18n` | `#[TranslatableResource]` |
+---
 
 ## Error Handling
 
-All exceptions use `DiscoveryException` with unique error codes:
-
 ```php
+use KaririCode\ClassDiscovery\Exception\DiscoveryException;
+
 try {
-    $result = $scanner->scan(['/nonexistent']);
+    $result = $scanner->scan(['/path/that/does/not/exist']);
 } catch (DiscoveryException $e) {
     match ($e->getCode()) {
         1001 => handlePathNotFound($e),
@@ -196,22 +305,39 @@ try {
 }
 ```
 
+---
+
 ## Architecture
 
 ```
 src/
-├── Contract/           7 interfaces (ISP)
-├── Scanner/            5 implementations (composition pattern)
-├── Result/             5 readonly DPOs (ARFA 1.3 P1)
-├── Filter/             5 filter predicates (AND/OR composable)
-├── Cache/              3 strategies (Strategy pattern)
-├── Analyzer/           2 analyzers (graph + cycle detection)
-├── Integration/        3 bridges (PSR-16, PSR-11, Configurator)
-├── Enum/               2 enums (1 backed, 1 pure)
-└── Exception/          1 exception (10 named constructors)
+├── Contract/      7 interfaces (ISP-compliant)
+├── Scanner/       5 implementations using composition
+├── Result/        5 final readonly DPOs (ARFA 1.3 P1)
+├── Filter/        5 composable predicates (AND/OR)
+├── Cache/         3 cache strategies (Chain, Memory, File)
+├── Analyzer/      2 analyzers (dependency graph + DFS cycle detection)
+├── Integration/   3 bridges (PSR-16, PSR-11, Configurator)
+├── Enum/          2 PHP 8.1 enums (backed + pure)
+└── Exception/     1 exception class, 10 named constructors
 
-33 files · ~2,800 lines · zero external dependencies
+33 files · ~2,800 lines · 222 tests · 95.44% line coverage · zero dependencies
 ```
+
+---
+
+## KaririCode Ecosystem Integration
+
+| Component | Attributes Discovered |
+|---|---|
+| `kariricode/router` | `#[Route]`, `#[Middleware]`, `#[Guard]` |
+| `kariricode/console` | `#[Command]`, `#[Argument]`, `#[Option]` |
+| `kariricode/dependency-injection` | `#[Singleton]`, `#[Scoped]`, `#[Tagged]` |
+| `kariricode/event-dispatcher` | `#[EventListener]`, `#[EventSubscriber]` |
+| `kariricode/websocket` | `#[WebSocketRoute]`, `#[OnConnect]`, `#[OnMessage]` |
+| `kariricode/i18n` | `#[TranslatableResource]` |
+
+---
 
 ## Documentation
 
@@ -222,6 +348,8 @@ src/
 - [ADR-004: Backed Enum for AttributeTarget](docs/adr/ADR-004-backed-enum-attribute-target.md)
 - [ADR-005: Composition Over Inheritance](docs/adr/ADR-005-composition-over-inheritance.md)
 - [ADR-006: Multi-Tier Cache Strategy](docs/adr/ADR-006-multi-tier-cache-strategy.md)
+
+---
 
 ## License
 
