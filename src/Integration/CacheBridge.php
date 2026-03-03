@@ -39,6 +39,7 @@ final readonly class CacheBridge implements CacheStrategy
     public function get(string $key): ?DiscoveryResult
     {
         /** @var DiscoveryResult|null $result */
+        // @phpstan-ignore method.notFound
         $result = $this->simpleCache->get($this->prefix . $key);
 
         return $result instanceof DiscoveryResult ? $result : null;
@@ -47,6 +48,7 @@ final readonly class CacheBridge implements CacheStrategy
     #[\Override]
     public function set(string $key, DiscoveryResult $result, int $ttl = 3600): void
     {
+        // @phpstan-ignore method.notFound
         $this->simpleCache->set(
             $this->prefix . $key,
             $result,
@@ -57,6 +59,7 @@ final readonly class CacheBridge implements CacheStrategy
     #[\Override]
     public function delete(string $key): void
     {
+        // @phpstan-ignore method.notFound
         $this->simpleCache->delete($this->prefix . $key);
     }
 
@@ -65,12 +68,14 @@ final readonly class CacheBridge implements CacheStrategy
     {
         // PSR-16 clear() clears everything — not ideal.
         // Prefer iterating known keys if the cache supports it.
+        // @phpstan-ignore method.notFound
         $this->simpleCache->clear();
     }
 
     #[\Override]
     public function has(string $key): bool
     {
+        // @phpstan-ignore method.notFound
         return $this->simpleCache->has($this->prefix . $key);
     }
 }

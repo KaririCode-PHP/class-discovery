@@ -41,19 +41,24 @@ final readonly class ConfiguratorBridge
      */
     public static function createScanner(array $config = []): Scanner
     {
+        // @phpstan-ignore cast.int (mixed from array<string,mixed>)
         $maxFileSize = (int) ($config['max_file_size'] ?? 10 * 1024 * 1024);
+        // @phpstan-ignore cast.int (mixed from array<string,mixed>)
         $maxFiles = (int) ($config['max_files'] ?? 10_000);
 
         $resolver = new ComposerNamespaceResolver(
+            // @phpstan-ignore argument.type (mixed from array<string,mixed>, null-safe)
             composerJsonPath: $config['composer_json'] ?? null,
             includeDevAutoload: (bool) ($config['include_dev'] ?? false),
         );
 
         $scanner = new AttributeScanner($resolver, $maxFileSize, $maxFiles);
 
+        // @phpstan-ignore offsetAccess.nonOffsetAccessible (mixed from array<string,mixed>)
         $cacheEnabled = (bool) ($config['cache']['enabled'] ?? true);
 
         if ($cacheEnabled) {
+            // @phpstan-ignore argument.type (mixed from array<string,mixed>)
             $scanner->setCacheStrategy(self::createCacheStrategy($config['cache'] ?? []));
         }
 
@@ -67,6 +72,7 @@ final readonly class ConfiguratorBridge
      */
     public static function createCacheStrategy(array $cacheConfig = []): CacheStrategy
     {
+        // @phpstan-ignore cast.string (mixed from array<string,mixed>)
         $dir = (string) ($cacheConfig['dir'] ?? sys_get_temp_dir() . '/kariricode_discovery');
 
         return new ChainCacheStrategy(

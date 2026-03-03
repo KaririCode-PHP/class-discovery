@@ -95,6 +95,9 @@ final readonly class DiscoveryResult implements DiscoveryResultContract
         return \count($this->classes);
     }
 
+    /**
+     * @return \ArrayIterator<string, ClassMetadata>
+     */
     #[\Override]
     public function getIterator(): \ArrayIterator
     {
