@@ -166,6 +166,45 @@ final class FileCacheStrategyTest extends TestCase
         $this->removeDir($dir);
     }
 
+    public function testConstructorThrowsWhenDirectoryCannotBeCreated(): void
+    {
+        // Create a file where the directory should be — mkdir will fail
+        $blockingFile = sys_get_temp_dir() . '/kc_block_' . uniqid();
+        file_put_contents($blockingFile, 'blocking');
+
+        // Trying to create a directory INSIDE the blocking file triggers mkdir failure
+        $impossibleDir = $blockingFile . '/subdir';
+
+        $this->expectException(DiscoveryException::class);
+
+        try {
+            new FileCacheStrategy($impossibleDir);
+        } finally {
+            unlink($blockingFile);
+        }
+    }
+
+    public function testClearReturnsSilentlyWhenDirectoryUnreadable(): void
+    {
+        // Populate some cache files first
+        $this->cache->set('x', new DiscoveryResult());
+
+        // Make the cache directory unreadable so glob() returns false
+        chmod($this->cacheDir, 0o000);
+
+        if (is_readable($this->cacheDir)) {
+            chmod($this->cacheDir, 0o755);
+            $this->markTestSkipped('Cannot make directory unreadable (running as root).');
+        }
+
+        // clear() must not throw — just return early (L94)
+        $this->cache->clear();
+        $this->assertTrue(true); // reached here without exception
+
+        // Restore so tearDown can clean up
+        chmod($this->cacheDir, 0o755);
+    }
+
     private function removeDir(string $dir): void
     {
         if (! is_dir($dir)) {

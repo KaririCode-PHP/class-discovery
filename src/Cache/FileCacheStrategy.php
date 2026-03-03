@@ -24,7 +24,7 @@ final readonly class FileCacheStrategy implements CacheStrategy
     public function __construct(
         private readonly string $cacheDirectory,
     ) {
-        if (! is_dir($this->cacheDirectory) && ! mkdir($this->cacheDirectory, 0o755, true)) {
+        if (! is_dir($this->cacheDirectory) && ! @mkdir($this->cacheDirectory, 0o755, true)) {
             throw DiscoveryException::cacheCorruption('init', "Cannot create cache directory: {$this->cacheDirectory}");
         }
     }
