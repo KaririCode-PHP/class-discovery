@@ -1,0 +1,41 @@
+# KaririCode ClassDiscovery — .gitignore
+# ARFA 1.3 / KaririCode Spec V4.0
+
+# PHP dependencies
+/vendor/
+
+# DevKit artifacts
+.kcode/
+
+# PHPUnit cache and coverage
+.phpunit.cache/
+.phpunit.result.cache
+build/
+
+# PHP CS Fixer cache
+.php-cs-fixer.cache
+.php-cs-fixer.php
+
+# Composer artifacts
+composer.lock
+
+# Psalm cache
+.psalm/
+
+# PHPStan cache
+.phpstan/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+/tmp/
+*.log

@@ -1,0 +1,43 @@
+{
+    "name": "kariricode/class-discovery",
+    "description": "PHP 8.4+ class discovery component with attribute scanning, token-based parsing, multi-tier caching, and dependency analysis. Part of the KaririCode Framework ecosystem.",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Walmir Silva",
+            "email": "walmir.silva@kariricode.org"
+        }
+    ],
+    "require": {
+        "php": "^8.4"
+    },
+    "require-dev": {},
+    "suggest": {
+        "kariricode/cache": "For PSR-16 cache integration via CacheBridge",
+        "kariricode/configurator": "For environment-aware discovery configuration",
+        "kariricode/dependency-injection": "For PSR-11 container integration"
+    },
+    "autoload": {
+        "psr-4": {
+            "KaririCode\\ClassDiscovery\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "KaririCode\\ClassDiscovery\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "quality": "kcode quality",
+        "test": "kcode test --coverage",
+        "analyse": "kcode analyse",
+        "cs:fix": "kcode cs:fix"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true,
+        "optimize-autoloader": true
+    }
+}
