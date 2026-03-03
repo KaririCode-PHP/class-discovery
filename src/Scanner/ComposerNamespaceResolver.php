@@ -88,7 +88,7 @@ final class ComposerNamespaceResolver implements NamespaceResolver
      */
     private function loadFromComposerJson(string $path, bool $includeDevAutoload): void
     {
-        $content = file_get_contents($path);
+        $content = @file_get_contents($path);
         if ($content === false) {
             return;
         }

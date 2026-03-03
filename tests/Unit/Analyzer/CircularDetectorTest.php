@@ -8,8 +8,10 @@ use KaririCode\ClassDiscovery\Analyzer\{CircularDetector, DependencyAnalyzer};
 use KaririCode\ClassDiscovery\Exception\DiscoveryException;
 use KaririCode\ClassDiscovery\Result\{DiscoveryResult};
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(CircularDetector::class)]
 final class CircularDetectorTest extends TestCase
 {
     use MetadataFactory;

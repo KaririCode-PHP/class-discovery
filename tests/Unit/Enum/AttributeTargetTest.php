@@ -6,8 +6,10 @@ namespace KaririCode\ClassDiscovery\Tests\Unit\Enum;
 
 use Attribute;
 use KaririCode\ClassDiscovery\Enum\AttributeTarget;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(AttributeTarget::class)]
 final class AttributeTargetTest extends TestCase
 {
     public function testMapsToNativeConstants(): void

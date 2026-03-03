@@ -6,8 +6,10 @@ namespace KaririCode\ClassDiscovery\Tests\Integration;
 
 use KaririCode\ClassDiscovery\Contract\NamespaceResolver;
 use KaririCode\ClassDiscovery\Scanner\AttributeScanner;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(AttributeScanner::class)]
 final class AttributeScannerIntegrationTest extends TestCase
 {
     private string $fixtureDir;

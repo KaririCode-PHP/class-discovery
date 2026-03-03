@@ -9,8 +9,10 @@ use KaririCode\ClassDiscovery\Cache\MemoryCacheStrategy;
 use KaririCode\ClassDiscovery\Contract\{AttributeScanner as AttributeScannerContract, Scanner};
 use KaririCode\ClassDiscovery\Integration\PSR11Integration;
 use KaririCode\ClassDiscovery\Scanner\{AttributeScanner, ReflectionScanner};
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(PSR11Integration::class)]
 final class PSR11IntegrationTest extends TestCase
 {
     public function testCreateDefaultScanner(): void
@@ -48,5 +50,13 @@ final class PSR11IntegrationTest extends TestCase
         $detector = PSR11Integration::createCircularDetector(throwOnDetection: true);
 
         self::assertInstanceOf(CircularDetector::class, $detector);
+    }
+
+    public function testCreateAttributeScannerWithCache(): void
+    {
+        $cache = new MemoryCacheStrategy();
+        $scanner = PSR11Integration::createAttributeScanner($cache);
+
+        self::assertInstanceOf(AttributeScannerContract::class, $scanner);
     }
 }

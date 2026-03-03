@@ -7,8 +7,10 @@ namespace KaririCode\ClassDiscovery\Tests\Unit\Analyzer;
 use KaririCode\ClassDiscovery\Analyzer\DependencyAnalyzer;
 use KaririCode\ClassDiscovery\Result\{DiscoveryResult};
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(DependencyAnalyzer::class)]
 final class DependencyAnalyzerTest extends TestCase
 {
     use MetadataFactory;

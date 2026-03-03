@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace KaririCode\ClassDiscovery\Tests\Unit\Cache;
 
 use KaririCode\ClassDiscovery\Cache\FileCacheStrategy;
+use KaririCode\ClassDiscovery\Exception\DiscoveryException;
 use KaririCode\ClassDiscovery\Result\DiscoveryResult;
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(FileCacheStrategy::class)]
 final class FileCacheStrategyTest extends TestCase
 {
     use MetadataFactory;
@@ -92,6 +95,66 @@ final class FileCacheStrategyTest extends TestCase
         self::assertTrue($cached->hasClass('App\\X'));
     }
 
+    public function testGetReturnsNullForExpiredEntry(): void
+    {
+        $result = new DiscoveryResult();
+
+        // Set with TTL=1s and immediately expire it by manipulating the file
+        $this->cache->set('expire', $result, 1);
+
+        // Read the cache file, change expires to past time
+        $files = glob($this->cacheDir . '/discovery_*.cache');
+        self::assertNotEmpty($files);
+
+        $data = unserialize(file_get_contents($files[0]) ?: '');
+        $data['expires'] = time() - 10; // force expired
+        file_put_contents($files[0], serialize($data));
+
+        self::assertNull($this->cache->get('expire'));
+    }
+
+    public function testGetReturnsNullForCorruptFile(): void
+    {
+        $this->cache->set('corrupt', new DiscoveryResult());
+
+        // Get cache file and write garbage
+        $files = glob($this->cacheDir . '/discovery_*.cache');
+        self::assertNotEmpty($files);
+        file_put_contents($files[0], 'not-serialized-garbage!!!');
+
+        self::assertNull($this->cache->get('corrupt'));
+    }
+
+    public function testGetThrowsOnInvalidResultType(): void
+    {
+        $this->cache->set('bad-type', new DiscoveryResult());
+
+        // Find the cache file and replace with incorrect type
+        $files = glob($this->cacheDir . '/discovery_*.cache');
+        self::assertNotEmpty($files);
+
+        $badData = serialize(['result' => new \stdClass(), 'expires' => 0]);
+        file_put_contents($files[0], $badData);
+
+        $this->expectException(DiscoveryException::class);
+        $this->cache->get('bad-type');
+    }
+
+    public function testDeleteNonExistentKeyDoesNothing(): void
+    {
+        // Should not throw
+        $this->cache->delete('nonexistent-key-xyz');
+        self::assertTrue(true);
+    }
+
+    public function testSetWithZeroTtlStoresForever(): void
+    {
+        $result = new DiscoveryResult();
+        $this->cache->set('forever', $result, 0);
+
+        self::assertNotNull($this->cache->get('forever'));
+    }
+
     public function testCreatesDirectoryOnConstruction(): void
     {
         $dir = sys_get_temp_dir() . '/kc_new_dir_' . uniqid();
@@ -101,6 +164,45 @@ final class FileCacheStrategyTest extends TestCase
 
         self::assertDirectoryExists($dir);
         $this->removeDir($dir);
+    }
+
+    public function testConstructorThrowsWhenDirectoryCannotBeCreated(): void
+    {
+        // Create a file where the directory should be — mkdir will fail
+        $blockingFile = sys_get_temp_dir() . '/kc_block_' . uniqid();
+        file_put_contents($blockingFile, 'blocking');
+
+        // Trying to create a directory INSIDE the blocking file triggers mkdir failure
+        $impossibleDir = $blockingFile . '/subdir';
+
+        $this->expectException(DiscoveryException::class);
+
+        try {
+            new FileCacheStrategy($impossibleDir);
+        } finally {
+            unlink($blockingFile);
+        }
+    }
+
+    public function testClearReturnsSilentlyWhenDirectoryUnreadable(): void
+    {
+        // Populate some cache files first
+        $this->cache->set('x', new DiscoveryResult());
+
+        // Make the cache directory unreadable so glob() returns false
+        chmod($this->cacheDir, 0o000);
+
+        if (is_readable($this->cacheDir)) {
+            chmod($this->cacheDir, 0o755);
+            $this->markTestSkipped('Cannot make directory unreadable (running as root).');
+        }
+
+        // clear() must not throw — just return early (L94)
+        $this->cache->clear();
+        $this->assertTrue(true); // reached here without exception
+
+        // Restore so tearDown can clean up
+        chmod($this->cacheDir, 0o755);
     }
 
     private function removeDir(string $dir): void

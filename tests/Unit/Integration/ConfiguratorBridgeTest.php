@@ -8,8 +8,10 @@ use KaririCode\ClassDiscovery\Cache\ChainCacheStrategy;
 use KaririCode\ClassDiscovery\Contract\{CacheStrategy, Scanner};
 use KaririCode\ClassDiscovery\Integration\ConfiguratorBridge;
 use KaririCode\ClassDiscovery\Scanner\AttributeScanner;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(ConfiguratorBridge::class)]
 final class ConfiguratorBridgeTest extends TestCase
 {
     public function testCreateScannerReturnsAttributeScanner(): void

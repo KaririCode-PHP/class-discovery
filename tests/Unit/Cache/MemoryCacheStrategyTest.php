@@ -7,8 +7,10 @@ namespace KaririCode\ClassDiscovery\Tests\Unit\Cache;
 use KaririCode\ClassDiscovery\Cache\MemoryCacheStrategy;
 use KaririCode\ClassDiscovery\Result\DiscoveryResult;
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(MemoryCacheStrategy::class)]
 final class MemoryCacheStrategyTest extends TestCase
 {
     use MetadataFactory;
@@ -85,5 +87,44 @@ final class MemoryCacheStrategyTest extends TestCase
 
         $cached = $this->cache->get('key');
         self::assertSame(2.0, $cached?->getScanDuration());
+    }
+
+    public function testGetReturnsNullForInternallyExpiredEntry(): void
+    {
+        // PHP's time() resolution is 1s, so we manually test the expiry branch
+        // by using Reflection to set a past expires value
+        $result = new DiscoveryResult();
+        $this->cache->set('expire-test', $result, 1);
+
+        $ref = new \ReflectionObject($this->cache);
+        $prop = $ref->getProperty('entries');
+        $entries = $prop->getValue($this->cache);
+        $entries['expire-test']['expires'] = time() - 10; // past
+        $prop->setValue($this->cache, $entries);
+
+        self::assertNull($this->cache->get('expire-test'));
+    }
+
+    public function testHasReturnsFalseForInternallyExpiredEntry(): void
+    {
+        $result = new DiscoveryResult();
+        $this->cache->set('has-expire', $result, 1);
+
+        $ref = new \ReflectionObject($this->cache);
+        $prop = $ref->getProperty('entries');
+        $entries = $prop->getValue($this->cache);
+        $entries['has-expire']['expires'] = time() - 10;
+        $prop->setValue($this->cache, $entries);
+
+        self::assertFalse($this->cache->has('has-expire'));
+    }
+
+    public function testZeroTtlNeverExpires(): void
+    {
+        $result = new DiscoveryResult();
+        $this->cache->set('forever', $result, 0);
+
+        self::assertNotNull($this->cache->get('forever'));
+        self::assertTrue($this->cache->has('forever'));
     }
 }

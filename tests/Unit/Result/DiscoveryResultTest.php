@@ -8,8 +8,10 @@ use KaririCode\ClassDiscovery\Contract\ClassFilter;
 use KaririCode\ClassDiscovery\Contract\DiscoveryResult as DiscoveryResultContract;
 use KaririCode\ClassDiscovery\Result\{ClassMetadata, DiscoveryResult};
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(DiscoveryResult::class)]
 final class DiscoveryResultTest extends TestCase
 {
     use MetadataFactory;
