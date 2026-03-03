@@ -26,6 +26,11 @@ use KaririCode\ClassDiscovery\Scanner\{AttributeScanner, ComposerNamespaceResolv
  * | discovery.max_files     | int    | 10000       |
  * | discovery.max_file_size | int    | 10485760    |
  * | discovery.paths         | array  | ['src/']    |
+ *
+ * @package KaririCode\ClassDiscovery\Integration
+ * @author  Walmir Silva <walmir.silva@kariricode.org>
+ * @license MIT
+ * @since   3.1.0
  */
 final readonly class ConfiguratorBridge
 {

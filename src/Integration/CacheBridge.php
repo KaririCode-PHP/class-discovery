@@ -15,8 +15,13 @@ use KaririCode\ClassDiscovery\Contract\DiscoveryResult;
  * PSR-16 compliant cache with the discovery system.
  *
  * Optional dependency: kariricode/cache
+ *
+ * @package KaririCode\ClassDiscovery\Integration
+ * @author  Walmir Silva <walmir.silva@kariricode.org>
+ * @license MIT
+ * @since   3.1.0
  */
-final class CacheBridge implements CacheStrategy
+final readonly class CacheBridge implements CacheStrategy
 {
     /**
      * @param object $simpleCache PSR-16 CacheInterface instance

@@ -12,6 +12,11 @@ use KaririCode\ClassDiscovery\Contract\DiscoveryResult;
  *
  * No persistence — cache lives only during the request lifecycle.
  * Zero I/O overhead. Ideal for dev mode with hot-reload.
+ *
+ * @package KaririCode\ClassDiscovery\Cache
+ * @author  Walmir Silva <walmir.silva@kariricode.org>
+ * @license MIT
+ * @since   3.0.0
  */
 final class MemoryCacheStrategy implements CacheStrategy
 {

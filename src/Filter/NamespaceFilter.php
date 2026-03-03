@@ -7,6 +7,14 @@ namespace KaririCode\ClassDiscovery\Filter;
 use KaririCode\ClassDiscovery\Contract\ClassFilter;
 use KaririCode\ClassDiscovery\Result\ClassMetadata;
 
+/**
+ * Filters classes by namespace prefix.
+ *
+ * @package KaririCode\ClassDiscovery\Filter
+ * @author  Walmir Silva <walmir.silva@kariricode.org>
+ * @license MIT
+ * @since   3.0.0
+ */
 final readonly class NamespaceFilter implements ClassFilter
 {
     public function __construct(
