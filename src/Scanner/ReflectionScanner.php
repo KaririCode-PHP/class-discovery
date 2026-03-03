@@ -120,6 +120,11 @@ final class ReflectionScanner implements ScannerContract
         $this->cache?->clear();
     }
 
+    /**
+     * @template T of object
+     *
+     * @param \ReflectionClass<T> $ref
+     */
     private function buildMetadataFromReflection(\ReflectionClass $ref): ClassMetadata
     {
         $attributes = [];
@@ -244,6 +249,9 @@ final class ReflectionScanner implements ScannerContract
         return true;
     }
 
+    /**
+     * @param array<string> $paths
+     */
     private function computeCacheKey(array $paths): string
     {
         $parts = [

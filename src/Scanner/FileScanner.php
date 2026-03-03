@@ -265,6 +265,8 @@ final class FileScanner implements ScannerContract
 
     /**
      * Extract namespace from token stream.
+     *
+     * @param array<int, string|array{0: int, 1: string, 2: int}> $tokens
      */
     private function extractNamespace(array $tokens, int &$position, int $count): string
     {
@@ -292,6 +294,8 @@ final class FileScanner implements ScannerContract
 
     /**
      * Extract class/interface/enum/trait name.
+     *
+     * @param array<int, string|array{0: int, 1: string, 2: int}> $tokens
      */
     private function extractIdentifier(array $tokens, int &$position, int $count): ?string
     {
@@ -316,6 +320,8 @@ final class FileScanner implements ScannerContract
 
     /**
      * Extract a qualified name (e.g., parent class).
+     *
+     * @param array<int, string|array{0: int, 1: string, 2: int}> $tokens
      */
     private function extractQualifiedName(array $tokens, int &$position, int $count): ?string
     {
@@ -353,6 +359,8 @@ final class FileScanner implements ScannerContract
 
     /**
      * Extract interface list from implements clause.
+     *
+     * @param array<int, string|array{0: int, 1: string, 2: int}> $tokens
      *
      * @return array<string>
      */
@@ -397,6 +405,8 @@ final class FileScanner implements ScannerContract
 
     /**
      * Extract attribute metadata from #[...] syntax.
+     *
+     * @param array<int, string|array{0: int, 1: string, 2: int}> $tokens
      */
     private function extractAttribute(
         array $tokens,
@@ -443,6 +453,8 @@ final class FileScanner implements ScannerContract
 
     /**
      * Check if a T_CLASS token is an anonymous class.
+     *
+     * @param array<int, string|array{0: int, 1: string, 2: int}> $tokens
      */
     private function isAnonymousClass(array $tokens, int $position): bool
     {
@@ -522,6 +534,8 @@ final class FileScanner implements ScannerContract
 
     /**
      * Compute deterministic cache key from scan parameters.
+     *
+     * @param array<string> $paths
      */
     private function computeCacheKey(array $paths): string
     {
