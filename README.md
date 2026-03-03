@@ -1,26 +1,73 @@
 # KaririCode ClassDiscovery
 
-[![PHP Version](https://img.shields.io/badge/php-%3E%3D8.4-blue)](https://php.net)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen)]()
-[![Tests](https://img.shields.io/badge/tests-222%20passing-brightgreen)]()
-[![Coverage](https://img.shields.io/badge/coverage-95.44%25-green)]()
-[![Quality](https://img.shields.io/badge/quality-cs--fixer%20%7C%20phpstan%20%7C%20psalm-blue)]()
+<div align="center">
 
-> **PHP 8.4+ class discovery** — token-based scanning, attribute-driven automation, multi-tier caching and circular dependency detection.  
-> Part of the [KaririCode Framework](https://kariricode.org). Zero external dependencies.
+[![PHP 8.4+](https://img.shields.io/badge/PHP-8.4%2B-777BB4?logo=php&logoColor=white)](https://www.php.net/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
+[![PHPStan Level 9](https://img.shields.io/badge/PHPStan-Level%209-4F46E5)](https://phpstan.org/)
+[![Tests](https://img.shields.io/badge/Tests-222%20passing-22c55e)](https://kariricode.org)
+[![Coverage](https://img.shields.io/badge/Coverage-95.44%25-22c55e)](https://kariricode.org)
+[![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen)](https://kariricode.org)
+[![KaririCode Framework](https://img.shields.io/badge/KaririCode-Framework-orange)](https://kariricode.org)
+
+**PHP 8.4+ class discovery — token-based scanning, attribute automation, multi-tier caching and dependency analysis.**
+
+Discover controllers, services, and event listeners automatically — without loading a single class.
+
+[Installation](#installation) · [Quick Start](#quick-start) · [Use Cases](#real-world-use-cases) · [Scanners](#scanner-comparison) · [Caching](#caching) · [CI Integration](#ci-integration)
+
+</div>
 
 ---
 
-## Why kariricode/class-discovery?
+## The Problem
 
-Modern PHP applications rely heavily on **convention-over-configuration** — routes auto-registered from `#[Route]`, services injected from `#[Service]`, event listeners wired from `#[EventListener]`. This library is the **engine** behind that automation: it scans your codebase, reads PHP attributes, and returns rich metadata that your framework components can act on — without ever loading or executing the discovered classes.
+Modern PHP applications rely on convention over configuration — routes registered from `#[Route]`, services injected from `#[Service]`, listeners wired from `#[EventListener]`. Without a discovery engine, teams end up writing this manually:
 
-Key decisions:
-- **Token-based parsing** (`token_get_all`) — never triggers autoloading or class execution
-- **Immutable results** — all result objects are `final readonly`, safe to cache and share
-- **Composable filters** — combine `AttributeFilter`, `InterfaceFilter`, `NamespaceFilter`, `StructuralFilter` with AND/OR logic
-- **Zero dependencies** — works in any PHP 8.4 project, no framework required
+```php
+// routes.php — manually maintained, drifts over time
+Router::get('/users', [UserController::class, 'index']);
+Router::post('/users', [UserController::class, 'store']);
+Router::get('/products', [ProductController::class, 'index']);
+// ... 300 more lines
+```
+
+And for services:
+
+```php
+// bootstrap.php — duplicated, error-prone
+$container->bind(MailerService::class, MailerService::class);
+$container->bind(PaymentService::class, PaymentService::class);
+// ... one entry per class forever
+```
+
+## The Solution
+
+```bash
+composer require kariricode/class-discovery
+```
+
+```php
+use KaririCode\ClassDiscovery\Filter\AttributeFilter;
+use KaririCode\ClassDiscovery\Scanner\{ComposerNamespaceResolver, FileScanner};
+
+$scanner = new FileScanner(new ComposerNamespaceResolver());
+$scanner->addFilter(new AttributeFilter(Route::class));
+
+// Discovers and returns all #[Route]-annotated controllers — instantly
+$result = $scanner->scan(['src/Controller']);
+```
+
+One scan replaces hundreds of manual registrations. Results are **immutable**, **cacheable**, and resolved in **30–80ms cold / <3ms warm**.
+
+---
+
+## Requirements
+
+| Requirement | Version |
+|---|---|
+| PHP | 8.4 or higher |
+| Composer | 2.x |
 
 ---
 
@@ -34,22 +81,60 @@ composer require kariricode/class-discovery
 
 ```bash
 composer require kariricode/cache                   # PSR-16 cache backend
-composer require kariricode/configurator            # Environment-aware config
+composer require kariricode/configurator            # Environment-aware configuration
 composer require kariricode/dependency-injection    # PSR-11 container
+```
+
+---
+
+## Quick Start
+
+### 1 — Discover all classes
+
+```php
+use KaririCode\ClassDiscovery\Scanner\{ComposerNamespaceResolver, FileScanner};
+
+$scanner = new FileScanner(new ComposerNamespaceResolver());
+$result  = $scanner->scan(['src/']);
+
+foreach ($result as $fqcn => $metadata) {
+    echo "{$fqcn} — {$metadata->filePath}\n";
+}
+
+echo "Found " . $result->count() . " classes in "
+   . round($result->getScanDuration() * 1000, 1) . "ms\n";
+```
+
+### 2 — Filter by attribute
+
+```php
+use KaririCode\ClassDiscovery\Filter\AttributeFilter;
+
+$scanner->addFilter(new AttributeFilter(Route::class));
+$result = $scanner->scan(['src/Controller']);
+```
+
+### 3 — Enable caching
+
+```php
+use KaririCode\ClassDiscovery\Cache\{ChainCacheStrategy, FileCacheStrategy, MemoryCacheStrategy};
+
+$cache = new ChainCacheStrategy(
+    new MemoryCacheStrategy(),
+    new FileCacheStrategy('/var/cache/discovery'),
+);
+
+$scanner->setCacheStrategy($cache);
+$result = $scanner->scan(['src/']);  // cold: ~60ms · warm: <2ms
 ```
 
 ---
 
 ## Real-world Use Cases
 
-### 1. HTTP Router — auto-register controllers from `#[Route]`
-
-Discover all classes and methods annotated with `#[Route]` without manually listing routes in a config file.
+### HTTP Router — auto-register controllers from `#[Route]`
 
 ```php
-use KaririCode\ClassDiscovery\Filter\AttributeFilter;
-use KaririCode\ClassDiscovery\Scanner\{ComposerNamespaceResolver, FileScanner};
-
 #[\Attribute(\Attribute::TARGET_CLASS | \Attribute::TARGET_METHOD)]
 final readonly class Route
 {
@@ -59,22 +144,17 @@ final readonly class Route
     ) {}
 }
 
-// ── Discovery ─────────────────────────────────────────────────────
+// Discovery
 $scanner = new FileScanner(new ComposerNamespaceResolver());
 $scanner->addFilter(new AttributeFilter(Route::class));
-
-$result = $scanner->scan(['src/Controller']);
+$result  = $scanner->scan(['src/Controller']);
 
 foreach ($result as $fqcn => $metadata) {
-    // Class-level route
-    if ($metadata->hasAttribute('Route')) {
-        $router->mount($fqcn);
-    }
+    $router->mount($fqcn);  // class-level #[Route]
 
-    // Method-level routes (use ReflectionScanner for attribute arg values)
     foreach ($metadata->methods as $method) {
         if ($method->hasAttribute('Route')) {
-            echo "  route: {$fqcn}::{$method->name}\n";
+            // Use ReflectionScanner to read path / method values
         }
     }
 }
@@ -82,48 +162,31 @@ foreach ($result as $fqcn => $metadata) {
 
 ---
 
-### 2. DI Container — auto-register services from `#[Service]`
-
-Eliminate manual service registration. Scan once at boot and populate your container automatically.
+### DI Container — auto-register services from `#[Service]`
 
 ```php
-use KaririCode\ClassDiscovery\Filter\AttributeFilter;
-use KaririCode\ClassDiscovery\Scanner\{ComposerNamespaceResolver, FileScanner};
-use KaririCode\ClassDiscovery\Cache\{ChainCacheStrategy, FileCacheStrategy, MemoryCacheStrategy};
-
-// Multi-tier cache: Memory (L1) → File (L2)
-$cache = new ChainCacheStrategy(
-    new MemoryCacheStrategy(),
-    new FileCacheStrategy('/var/cache/discovery'),
-);
-
 $scanner = new FileScanner(new ComposerNamespaceResolver());
 $scanner->addFilter(new AttributeFilter(Service::class));
-$scanner->setCacheStrategy($cache);  // cold: ~60ms, warm: <2ms
+$scanner->setCacheStrategy($cache);  // warm: <2ms
 
 $result = $scanner->scan(['src/Service', 'src/Repository']);
 
 foreach ($result as $fqcn => $metadata) {
-    // Register every discovered class in the DI container
-    $container->bind($fqcn, $fqcn);
+    $container->bind($fqcn, $fqcn);  // zero manual registration
 }
 ```
 
 ---
 
-### 3. Event Dispatcher — auto-wire listeners from `#[EventListener]`
-
-Discover and register all event listeners without a YAML/XML mapping file.
+### Event Dispatcher — auto-wire listeners from `#[EventListener]`
 
 ```php
-use KaririCode\ClassDiscovery\Scanner\{ComposerNamespaceResolver, ReflectionScanner};
-use KaririCode\ClassDiscovery\Filter\AttributeFilter;
+use KaririCode\ClassDiscovery\Scanner\ReflectionScanner;
 
 // ReflectionScanner reads actual attribute constructor values
 $scanner = new ReflectionScanner(new ComposerNamespaceResolver());
 $scanner->addFilter(new AttributeFilter(EventListener::class));
-
-$result = $scanner->scan(['src/Listener']);
+$result  = $scanner->scan(['src/Listener']);
 
 foreach ($result as $fqcn => $metadata) {
     foreach ($metadata->attributes as $attrMeta) {
@@ -140,18 +203,15 @@ foreach ($result as $fqcn => $metadata) {
 
 ---
 
-### 4. Plugin System — discover extensions by interface
-
-Find all classes implementing a specific interface across dynamically loaded modules.
+### Plugin System — discover extensions by interface
 
 ```php
 use KaririCode\ClassDiscovery\Filter\InterfaceFilter;
-use KaririCode\ClassDiscovery\Scanner\{ComposerNamespaceResolver, FileScanner};
 
 $scanner = new FileScanner(new ComposerNamespaceResolver());
 $scanner->addFilter(new InterfaceFilter(PaymentGatewayInterface::class));
 
-$result = $scanner->scan(['plugins/']);  // scan dynamically loaded plugin dirs
+$result = $scanner->scan(['plugins/']);
 
 foreach ($result as $fqcn => $metadata) {
     $registry->register(new $fqcn());
@@ -160,13 +220,10 @@ foreach ($result as $fqcn => $metadata) {
 
 ---
 
-### 5. Refactoring Guard — detect circular dependencies
-
-Catch dependency cycles before they reach production.
+### Refactoring Guard — detect circular dependencies
 
 ```php
 use KaririCode\ClassDiscovery\Analyzer\{CircularDetector, DependencyAnalyzer};
-use KaririCode\ClassDiscovery\Scanner\{ComposerNamespaceResolver, FileScanner};
 
 $scanner  = new FileScanner(new ComposerNamespaceResolver());
 $result   = $scanner->scan(['src/']);
@@ -177,18 +234,15 @@ $detector = new CircularDetector(
 );
 
 $cycles = $detector->check($result);
-// Returns: [['App\A', 'App\B', 'App\C', 'App\A']]
+// [['App\A', 'App\B', 'App\C', 'App\A']]
 ```
 
 ---
 
-### 6. Console Command Auto-registration
-
-Discover all `#[Command]` annotated classes for a CLI application.
+### Console — auto-register commands from `#[Command]`
 
 ```php
 use KaririCode\ClassDiscovery\Filter\{AttributeFilter, NamespaceFilter};
-use KaririCode\ClassDiscovery\Scanner\{ComposerNamespaceResolver, FileScanner};
 
 $scanner = new FileScanner(new ComposerNamespaceResolver());
 $scanner->addFilter(new AttributeFilter(Command::class));
@@ -208,15 +262,15 @@ foreach ($result as $fqcn => $metadata) {
 | Scanner | Parser | Loads Classes | Performance* | Best For |
 |---|---|---|---|---|
 | `FileScanner` | `token_get_all` | ❌ Never | 30–80ms cold / <3ms warm | General listing, attribute names |
-| `AttributeScanner` | `FileScanner` + filter | ❌ Never | 50–100ms cold / <5ms warm | Attribute-driven discovery |
-| `DirectoryScanner` | `FileScanner` + constraints | ❌ Never | dep. on I/O | Depth/pattern-bounded scan |
+| `AttributeScanner` | FileScanner + filter | ❌ Never | 50–100ms cold / <5ms warm | Attribute-driven discovery |
+| `DirectoryScanner` | FileScanner + constraints | ❌ Never | dep. on I/O | Depth/pattern-bounded scan |
 | `ReflectionScanner` | `ReflectionClass` | ✅ Required | 300–800ms | Full attribute argument values |
 
-*per 1,000 classes — with `FileCacheStrategy` warm scans are typically **5–10× faster**
+*per 1,000 classes — with cache, warm scans are typically **5–10× faster**
 
 ---
 
-## Filters (Composable)
+## Filters
 
 ```php
 use KaririCode\ClassDiscovery\Filter\{
@@ -227,19 +281,24 @@ use KaririCode\ClassDiscovery\Filter\{
     CompositeFilter,
 };
 
-// Match classes that implement an interface AND are in a namespace
+// By attribute (OR — multiple attribute classes)
+$scanner->addFilter(new AttributeFilter(Route::class, Command::class));
+
+// By implemented interface
 $scanner->addFilter(new InterfaceFilter(HandlerInterface::class));
+
+// By namespace prefix
 $scanner->addFilter(new NamespaceFilter('App\\Handler'));
 
-// OR-logic: match by attribute OR by interface (composite)
+// By structural characteristics
+$scanner->addFilter(new StructuralFilter(isFinal: true, isReadonly: true));
+
+// OR-logic composite (attribute OR interface)
 $scanner->addFilter(new CompositeFilter(
-    requireAll: false,                              // OR mode
+    requireAll: false,
     new AttributeFilter(Route::class),
     new InterfaceFilter(ControllerInterface::class),
 ));
-
-// Structural: only abstract, non-readonly classes
-$scanner->addFilter(new StructuralFilter(isAbstract: true, isReadonly: false));
 ```
 
 ---
@@ -248,20 +307,22 @@ $scanner->addFilter(new StructuralFilter(isAbstract: true, isReadonly: false));
 
 ```php
 use KaririCode\ClassDiscovery\Cache\{
-    ChainCacheStrategy,
-    FileCacheStrategy,
-    MemoryCacheStrategy,
+    ChainCacheStrategy,     // L1 → L2 chain with automatic promotion
+    FileCacheStrategy,      // Atomic writes (temp → rename), OPcache-friendly
+    MemoryCacheStrategy,    // In-process, process-lifetime
 };
 
-// L1: in-memory (process lifetime)
-// L2: file-based (cross-request, atomic writes)
+// Multi-tier: Memory (L1) → File (L2)
 $cache = new ChainCacheStrategy(
     new MemoryCacheStrategy(defaultTtl: 60),
     new FileCacheStrategy('/var/cache/discovery', defaultTtl: 3600),
 );
 
 $scanner->setCacheStrategy($cache);
-$result = $scanner->scan(['src/']);  // cold: filesystem; warm: <2ms from memory
+
+// First request  : hits filesystem (~60ms)
+// Every request after: hits memory   (<1ms)
+$result = $scanner->scan(['src/']);
 ```
 
 ---
@@ -307,12 +368,69 @@ try {
 
 ---
 
+## CI Integration
+
+### GitHub Actions — unified pipeline
+
+```yaml
+name: Quality
+on: [push, pull_request]
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: pcov
+      - run: composer install --no-progress --no-scripts
+      - run: vendor/bin/kcode init
+      - run: vendor/bin/kcode quality
+```
+
+### GitHub Actions — parallel jobs
+
+```yaml
+jobs:
+  cs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with: { php-version: '8.4' }
+      - run: composer install --no-progress --no-scripts
+      - run: vendor/bin/kcode init && vendor/bin/kcode cs:fix --check
+
+  analyse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with: { php-version: '8.4' }
+      - run: composer install --no-progress --no-scripts
+      - run: vendor/bin/kcode init && vendor/bin/kcode analyse
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with: { php-version: '8.4', coverage: pcov }
+      - run: composer install --no-progress --no-scripts
+      - run: vendor/bin/kcode init && vendor/bin/kcode test
+```
+
+---
+
 ## Architecture
+
+### Component layout
 
 ```
 src/
 ├── Contract/      7 interfaces (ISP-compliant)
-├── Scanner/       5 implementations using composition
+├── Scanner/       5 implementations (composition pattern)
 ├── Result/        5 final readonly DPOs (ARFA 1.3 P1)
 ├── Filter/        5 composable predicates (AND/OR)
 ├── Cache/         3 cache strategies (Chain, Memory, File)
@@ -320,9 +438,42 @@ src/
 ├── Integration/   3 bridges (PSR-16, PSR-11, Configurator)
 ├── Enum/          2 PHP 8.1 enums (backed + pure)
 └── Exception/     1 exception class, 10 named constructors
-
-33 files · ~2,800 lines · 222 tests · 95.44% line coverage · zero dependencies
 ```
+
+### Key design decisions
+
+| Decision | Rationale | ADR |
+|---|---|---|
+| Token-based parsing | Never loads or executes discovered classes | [ADR-001](docs/adr/ADR-001-token-based-scanning.md) |
+| Zero external dependencies | Works in any PHP 8.4 project, no version conflicts | [ADR-002](docs/adr/ADR-002-zero-external-dependencies.md) |
+| Immutable result objects | Thread-safe, cacheable, ARFA 1.3 compliant | [ADR-003](docs/adr/ADR-003-immutable-discovery-results.md) |
+| Composition over inheritance | Scanners compose `FileScanner`; no deep hierarchies | [ADR-005](docs/adr/ADR-005-composition-over-inheritance.md) |
+| Multi-tier cache strategy | Memory (L1) → File (L2), 5–10× warm speedup | [ADR-006](docs/adr/ADR-006-multi-tier-cache-strategy.md) |
+
+### Specifications
+
+| Spec | Covers |
+|---|---|
+| [SPEC-001](docs/spec/SPEC-001-component-specification.md) | Component architecture, contracts, scanner strategies |
+
+---
+
+## Project Stats
+
+| Metric | Value |
+|---|---|
+| PHP source files | 33 |
+| Total source lines | ~2,800 |
+| External runtime dependencies | 0 |
+| Filter types | 5 (Attribute, Interface, Namespace, Structural, Composite) |
+| Scanner strategies | 4 (File, Attribute, Directory, Reflection) |
+| Cache strategies | 3 (Memory, File, Chain) |
+| PHPStan level | 9 (0 errors) |
+| Psalm level | 3 (0 errors) |
+| Test suite | 222 tests · 440 assertions |
+| Line coverage | 95.44% |
+| PHP version | 8.4+ |
+| ARFA compliance | 1.3 |
 
 ---
 
@@ -339,22 +490,30 @@ src/
 
 ---
 
-## Documentation
+## Contributing
 
-- [SPEC-001: Component Specification](docs/spec/SPEC-001-component-specification.md)
-- [ADR-001: Token-Based Scanning Over Reflection](docs/adr/ADR-001-token-based-scanning.md)
-- [ADR-002: Zero External Dependencies](docs/adr/ADR-002-zero-external-dependencies.md)
-- [ADR-003: Immutable Discovery Results](docs/adr/ADR-003-immutable-discovery-results.md)
-- [ADR-004: Backed Enum for AttributeTarget](docs/adr/ADR-004-backed-enum-attribute-target.md)
-- [ADR-005: Composition Over Inheritance](docs/adr/ADR-005-composition-over-inheritance.md)
-- [ADR-006: Multi-Tier Cache Strategy](docs/adr/ADR-006-multi-tier-cache-strategy.md)
+```bash
+git clone https://github.com/kariricode/class-discovery.git
+cd class-discovery
+composer install
+vendor/bin/kcode init
+vendor/bin/kcode quality   # Must pass before opening a PR
+```
+
+CI enforces code quality (PHPStan level 9, Psalm, CS-Fixer, PHPUnit) on every push and PR.
 
 ---
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+[MIT License](LICENSE) © [Walmir Silva](mailto:walmir.silva@kariricode.org)
 
-## Author
+---
 
-Walmir Silva — [walmir.silva@kariricode.org](mailto:walmir.silva@kariricode.org)
+<div align="center">
+
+Part of the **[KaririCode Framework](https://kariricode.org)** ecosystem.
+
+[kariricode.org](https://kariricode.org) · [GitHub](https://github.com/kariricode) · [Packagist](https://packagist.org/packages/kariricode/)
+
+</div>
