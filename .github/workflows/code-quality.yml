@@ -94,26 +94,16 @@ jobs:
       - name: Initialize devkit
         run: kcode init
 
-      # Patch generated phpunit.xml.dist — PHPUnit 12 emits false-positive warnings
-      # for classes extending built-ins outside <source>; use python3 for reliable XML edit.
+      # Patch generated phpunit.xml.dist — disable failOnWarning and strict
+      # coverage metadata to avoid false-positive warnings from PHPUnit 12.
       - name: Patch phpunit.xml.dist
         run: |
-          python3 - <<'EOF'
-          import xml.etree.ElementTree as ET
-          ET.register_namespace('', 'http://www.w3.org/2001/XMLSchema-instance')
-          path = '.kcode/phpunit.xml.dist'
-          tree = ET.parse(path)
-          root = tree.getroot()
-          root.set('failOnWarning', 'false')
-          root.set('failOnRisky', 'false')
-          root.set('beStrictAboutCoverageMetadata', 'false')
-          src = root.find('source')
-          if src is not None:
-              src.attrib.pop('restrictWarnings', None)
-              src.attrib.pop('restrictDeprecations', None)
-              src.attrib.pop('restrictNotices', None)
-          tree.write(path, xml_declaration=True, encoding='UTF-8')
-          EOF
+          sed -i 's/failOnWarning="true"/failOnWarning="false"/' .kcode/phpunit.xml.dist
+          sed -i 's/failOnRisky="true"/failOnRisky="false"/' .kcode/phpunit.xml.dist
+          sed -i 's/beStrictAboutCoverageMetadata="true"/beStrictAboutCoverageMetadata="false"/' .kcode/phpunit.xml.dist
+          sed -i 's/ restrictWarnings="true"//g' .kcode/phpunit.xml.dist
+          sed -i 's/ restrictDeprecations="true"//g' .kcode/phpunit.xml.dist
+          sed -i 's/ restrictNotices="true"//g' .kcode/phpunit.xml.dist
 
       # Runs PHPStan Level 9 then Psalm sequentially — both must pass
       - name: Run PHPStan + Psalm via kcode
@@ -181,26 +171,16 @@ jobs:
       - name: Initialize devkit
         run: kcode init
 
-      # Patch generated phpunit.xml.dist — PHPUnit 12 emits false-positive warnings
-      # for classes extending built-ins outside <source>; use python3 for reliable XML edit.
+      # Patch generated phpunit.xml.dist — disable failOnWarning and strict
+      # coverage metadata to avoid false-positive warnings from PHPUnit 12.
       - name: Patch phpunit.xml.dist
         run: |
-          python3 - <<'EOF'
-          import xml.etree.ElementTree as ET
-          ET.register_namespace('', 'http://www.w3.org/2001/XMLSchema-instance')
-          path = '.kcode/phpunit.xml.dist'
-          tree = ET.parse(path)
-          root = tree.getroot()
-          root.set('failOnWarning', 'false')
-          root.set('failOnRisky', 'false')
-          root.set('beStrictAboutCoverageMetadata', 'false')
-          src = root.find('source')
-          if src is not None:
-              src.attrib.pop('restrictWarnings', None)
-              src.attrib.pop('restrictDeprecations', None)
-              src.attrib.pop('restrictNotices', None)
-          tree.write(path, xml_declaration=True, encoding='UTF-8')
-          EOF
+          sed -i 's/failOnWarning="true"/failOnWarning="false"/' .kcode/phpunit.xml.dist
+          sed -i 's/failOnRisky="true"/failOnRisky="false"/' .kcode/phpunit.xml.dist
+          sed -i 's/beStrictAboutCoverageMetadata="true"/beStrictAboutCoverageMetadata="false"/' .kcode/phpunit.xml.dist
+          sed -i 's/ restrictWarnings="true"//g' .kcode/phpunit.xml.dist
+          sed -i 's/ restrictDeprecations="true"//g' .kcode/phpunit.xml.dist
+          sed -i 's/ restrictNotices="true"//g' .kcode/phpunit.xml.dist
 
       - name: Run tests with coverage (pcov)
         run: kcode test --coverage
