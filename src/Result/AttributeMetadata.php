@@ -25,6 +25,7 @@ final readonly class AttributeMetadata
      * @param array<mixed>    $arguments    Constructor arguments (positional + named)
      * @param bool            $isRepeated   Whether attribute appears multiple times
      * @param string|null     $targetName   Name of the annotated element (method/property name)
+     * @param object|null     $instance     Instantiated attribute object (ReflectionScanner only)
      */
     public function __construct(
         public string $name,
@@ -32,6 +33,7 @@ final readonly class AttributeMetadata
         public array $arguments = [],
         public bool $isRepeated = false,
         public ?string $targetName = null,
+        public ?object $instance = null,
     ) {
     }
 }
