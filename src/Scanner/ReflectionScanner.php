@@ -129,11 +129,20 @@ final class ReflectionScanner implements ScannerContract
     {
         $attributes = [];
         foreach ($ref->getAttributes() as $attr) {
+            $instance = null;
+
+            try {
+                $instance = $attr->newInstance();
+            } catch (\Throwable) {
+                // Attribute has unresolvable constructor args — store args only
+            }
+
             $attributes[$attr->getName()] = new AttributeMetadata(
                 name: $attr->getName(),
                 target: AttributeTarget::Class_,
                 arguments: $attr->getArguments(),
                 isRepeated: $attr->isRepeated(),
+                instance: $instance,
             );
         }
 
@@ -145,12 +154,21 @@ final class ReflectionScanner implements ScannerContract
 
             $methodAttrs = [];
             foreach ($method->getAttributes() as $attr) {
+                $methodInstance = null;
+
+                try {
+                    $methodInstance = $attr->newInstance();
+                } catch (\Throwable) {
+                    // Attribute has unresolvable constructor args — store args only
+                }
+
                 $methodAttrs[$attr->getName()] = new AttributeMetadata(
                     name: $attr->getName(),
                     target: AttributeTarget::Method,
                     arguments: $attr->getArguments(),
                     isRepeated: $attr->isRepeated(),
                     targetName: $method->getName(),
+                    instance: $methodInstance,
                 );
             }
 
@@ -183,12 +201,21 @@ final class ReflectionScanner implements ScannerContract
 
             $propAttrs = [];
             foreach ($prop->getAttributes() as $attr) {
+                $propInstance = null;
+
+                try {
+                    $propInstance = $attr->newInstance();
+                } catch (\Throwable) {
+                    // Attribute has unresolvable constructor args — store args only
+                }
+
                 $propAttrs[$attr->getName()] = new AttributeMetadata(
                     name: $attr->getName(),
                     target: AttributeTarget::Property,
                     arguments: $attr->getArguments(),
                     isRepeated: $attr->isRepeated(),
                     targetName: $prop->getName(),
+                    instance: $propInstance,
                 );
             }
 

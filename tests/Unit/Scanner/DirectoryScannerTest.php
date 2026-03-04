@@ -19,10 +19,10 @@ use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(DirectoryScanner::class)]
+#[CoversClass(DiscoveryException::class)]
 #[UsesClass(FileScanner::class)]
 #[UsesClass(ConcreteDiscoveryResult::class)]
 #[UsesClass(ClassMetadata::class)]
-#[UsesClass(DiscoveryException::class)]
 
 final class DirectoryScannerTest extends TestCase
 {
