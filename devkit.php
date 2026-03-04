@@ -43,7 +43,7 @@ return [
     // ],
 
     // ── Coverage ──────────────────────────────────────────────
-    // 'coverage_exclude' => ['src/Exception'],
+    'coverage_exclude' => ['src/Exception'],
 
     // ── Code Style (MERGED with KaririCode defaults) ──────────
     // 'cs_fixer_rules' => [
