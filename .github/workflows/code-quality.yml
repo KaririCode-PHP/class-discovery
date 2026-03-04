@@ -94,17 +94,6 @@ jobs:
       - name: Initialize devkit
         run: kcode init
 
-      # Patch generated phpunit.xml.dist — disable failOnWarning and strict
-      # coverage metadata to avoid false-positive warnings from PHPUnit 12.
-      - name: Patch phpunit.xml.dist
-        run: |
-          sed -i 's/failOnWarning="true"/failOnWarning="false"/' .kcode/phpunit.xml.dist
-          sed -i 's/failOnRisky="true"/failOnRisky="false"/' .kcode/phpunit.xml.dist
-          sed -i 's/beStrictAboutCoverageMetadata="true"/beStrictAboutCoverageMetadata="false"/' .kcode/phpunit.xml.dist
-          sed -i 's/ restrictWarnings="true"//g' .kcode/phpunit.xml.dist
-          sed -i 's/ restrictDeprecations="true"//g' .kcode/phpunit.xml.dist
-          sed -i 's/ restrictNotices="true"//g' .kcode/phpunit.xml.dist
-
       # Runs PHPStan Level 9 then Psalm sequentially — both must pass
       - name: Run PHPStan + Psalm via kcode
         run: kcode analyse
@@ -170,17 +159,6 @@ jobs:
 
       - name: Initialize devkit
         run: kcode init
-
-      # Patch generated phpunit.xml.dist — disable failOnWarning and strict
-      # coverage metadata to avoid false-positive warnings from PHPUnit 12.
-      - name: Patch phpunit.xml.dist
-        run: |
-          sed -i 's/failOnWarning="true"/failOnWarning="false"/' .kcode/phpunit.xml.dist
-          sed -i 's/failOnRisky="true"/failOnRisky="false"/' .kcode/phpunit.xml.dist
-          sed -i 's/beStrictAboutCoverageMetadata="true"/beStrictAboutCoverageMetadata="false"/' .kcode/phpunit.xml.dist
-          sed -i 's/ restrictWarnings="true"//g' .kcode/phpunit.xml.dist
-          sed -i 's/ restrictDeprecations="true"//g' .kcode/phpunit.xml.dist
-          sed -i 's/ restrictNotices="true"//g' .kcode/phpunit.xml.dist
 
       - name: Run tests with coverage (pcov)
         run: kcode test --coverage
