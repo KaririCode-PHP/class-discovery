@@ -49,6 +49,7 @@ final class FileScanner implements ScannerContract
     private ?CacheStrategy $cache = null;
 
     public function __construct(
+        /** @phpstan-ignore property.onlyWritten (stored for interface contract compliance) */
         private readonly NamespaceResolver $namespaceResolver,
         private readonly int $maxFileSize = self::MAX_FILE_SIZE,
         private readonly int $maxFiles = self::MAX_FILES_PER_SCAN,

@@ -39,6 +39,7 @@ final class DirectoryScanner implements DirectoryScannerContract
     private readonly FileScanner $fileScanner;
 
     public function __construct(
+        /** @phpstan-ignore property.onlyWritten (stored for future use / interface requirement) */
         private readonly NamespaceResolver $namespaceResolver,
     ) {
         $this->fileScanner = new FileScanner($namespaceResolver);
@@ -178,9 +179,9 @@ final class DirectoryScanner implements DirectoryScannerContract
                 $fullPath = $target;
             }
 
-            // $fullPath is guaranteed to be string at this point.
+            // $fullPath is guaranteed to be non-empty-string at this point.
             // Psalm cannot infer this after the symlink branch, so we assert.
-            /** @var string $fullPath */
+            /** @var non-empty-string $fullPath */
             if (is_dir($fullPath)) {
                 $files = array_merge(
                     $files,

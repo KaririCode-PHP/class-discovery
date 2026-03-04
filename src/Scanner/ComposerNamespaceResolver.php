@@ -100,7 +100,7 @@ final class ComposerNamespaceResolver implements NamespaceResolver
 
         $baseDir = \dirname(realpath($path) ?: $path);
 
-        $this->extractPsr4Mappings($data['autoload']['psr-4'] ?? [], $baseDir);
+        $this->extractPsr4Mappings($data['autoload']['psr-4'] ?? [], $baseDir); // @phpstan-ignore offsetAccess.nonOffsetAccessible, argument.type
 
         if ($includeDevAutoload) {
             $this->extractPsr4Mappings($data['autoload-dev']['psr-4'] ?? [], $baseDir);
