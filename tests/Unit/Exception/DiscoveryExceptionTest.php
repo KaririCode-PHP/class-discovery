@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace KaririCode\ClassDiscovery\Tests\Unit\Exception;
 
 use KaririCode\ClassDiscovery\Exception\DiscoveryException;
-use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-#[UsesClass(DiscoveryException::class)]
+#[CoversClass(DiscoveryException::class)]
 final class DiscoveryExceptionTest extends TestCase
 {
     #[\PHPUnit\Framework\Attributes\DataProvider('namedConstructorProvider')]
