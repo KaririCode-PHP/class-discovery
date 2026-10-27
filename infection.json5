@@ -1,0 +1,17 @@
+{
+    "$schema": "vendor/infection/infection/resources/schema.json",
+    "source": {
+        "directories": ["src"]
+    },
+    "mutators": {
+        "@default": true
+    },
+    "logs": {
+        "text": ".infection/infection.log",
+        "summary": ".infection/summary.log"
+    },
+    "tmpDir": ".infection/tmp",
+    // Spec §29.1 — MSI ≥ 80% on the domain.
+    "minMsi": 80,
+    "minCoveredMsi": 80
+}

@@ -6,11 +6,10 @@ namespace KaririCode\ClassDiscovery\Tests\Unit\Cache;
 
 use KaririCode\ClassDiscovery\Cache\MemoryCacheStrategy;
 use KaririCode\ClassDiscovery\Result\DiscoveryResult;
+use KaririCode\ClassDiscovery\Tests\Double\SettableClock;
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
-use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(MemoryCacheStrategy::class)]
 final class MemoryCacheStrategyTest extends TestCase
 {
     use MetadataFactory;
@@ -66,15 +65,21 @@ final class MemoryCacheStrategyTest extends TestCase
         self::assertFalse($this->cache->has('b'));
     }
 
-    public function testTtlExpiration(): void
+    public function testEntryWithinItsTtlIsServed(): void
     {
         $result = new DiscoveryResult();
-
-        // TTL of 0 should expire immediately (or be treated as no-expire)
-        // The memory cache stores expiry = time() + ttl, so ttl=1 will expire after 1s
         $this->cache->set('ttl-key', $result, 3600);
 
-        self::assertNotNull($this->cache->get('ttl-key'));
+        self::assertSame($result, $this->cache->get('ttl-key'));
+    }
+
+    public function testNonPositiveTtlMeansNoExpiry(): void
+    {
+        $result = new DiscoveryResult();
+        $this->cache->set('forever', $result, 0);
+
+        self::assertSame($result, $this->cache->get('forever'));
+        self::assertTrue($this->cache->has('forever'));
     }
 
     public function testOverwriteExistingKey(): void
@@ -89,42 +94,27 @@ final class MemoryCacheStrategyTest extends TestCase
         self::assertSame(2.0, $cached?->getScanDuration());
     }
 
-    public function testGetReturnsNullForInternallyExpiredEntry(): void
+    public function testEntryIsServedUntilItsTtlElapsesThenPurged(): void
     {
-        // PHP's time() resolution is 1s, so we manually test the expiry branch
-        // by using Reflection to set a past expires value
-        $result = new DiscoveryResult();
-        $this->cache->set('expire-test', $result, 1);
+        $clock = new SettableClock();
+        $cache = new MemoryCacheStrategy($clock);
+        $cache->set('k', new DiscoveryResult(), 60);
 
-        $ref = new \ReflectionObject($this->cache);
-        $prop = $ref->getProperty('entries');
-        $entries = $prop->getValue($this->cache);
-        $entries['expire-test']['expires'] = time() - 10; // past
-        $prop->setValue($this->cache, $entries);
+        $clock->advance(60);
+        self::assertNotNull($cache->get('k'), 'still valid at exactly the TTL');
 
-        self::assertNull($this->cache->get('expire-test'));
-    }
-
-    public function testHasReturnsFalseForInternallyExpiredEntry(): void
-    {
-        $result = new DiscoveryResult();
-        $this->cache->set('has-expire', $result, 1);
-
-        $ref = new \ReflectionObject($this->cache);
-        $prop = $ref->getProperty('entries');
-        $entries = $prop->getValue($this->cache);
-        $entries['has-expire']['expires'] = time() - 10;
-        $prop->setValue($this->cache, $entries);
-
-        self::assertFalse($this->cache->has('has-expire'));
+        $clock->advance(1);
+        self::assertNull($cache->get('k'));
+        self::assertFalse($cache->has('k'));
     }
 
     public function testZeroTtlNeverExpires(): void
     {
-        $result = new DiscoveryResult();
-        $this->cache->set('forever', $result, 0);
+        $clock = new SettableClock();
+        $cache = new MemoryCacheStrategy($clock);
+        $cache->set('k', new DiscoveryResult(), 0);
 
-        self::assertNotNull($this->cache->get('forever'));
-        self::assertTrue($this->cache->has('forever'));
+        $clock->advance(10 * 365 * 24 * 3600);
+        self::assertNotNull($cache->get('k'));
     }
 }

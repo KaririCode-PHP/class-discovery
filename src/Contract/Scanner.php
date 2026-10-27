@@ -22,10 +22,10 @@ namespace KaririCode\ClassDiscovery\Contract;
  *
  * Ref: Gamma et al., "Design Patterns" (1994) — Strategy Pattern §5.9
  *
- * @package KaririCode\ClassDiscovery\Contract
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.1.0
+ * ```php
+ * $result = $scanner->scan(['src/', 'modules/']);
+ * $result->hasClass(HomeController::class);
+ * ```
  */
 interface Scanner
 {

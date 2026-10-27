@@ -4,75 +4,61 @@ declare(strict_types=1);
 
 namespace KaririCode\ClassDiscovery\Tests\Unit\Analyzer;
 
-use KaririCode\ClassDiscovery\Analyzer\{CircularDetector, DependencyAnalyzer};
+use KaririCode\ClassDiscovery\Analyzer\CircularDetector;
+use KaririCode\ClassDiscovery\Analyzer\DependencyAnalyzer;
+use KaririCode\ClassDiscovery\Analyzer\DependencyCycle;
 use KaririCode\ClassDiscovery\Exception\DiscoveryException;
-use KaririCode\ClassDiscovery\Result\{DiscoveryResult};
+use KaririCode\ClassDiscovery\Result\DiscoveryResult;
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
-use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(CircularDetector::class)]
 final class CircularDetectorTest extends TestCase
 {
     use MetadataFactory;
 
-    public function testCheckReturnsCyclesWithoutThrowing(): void
+    public function testReportsCyclesWithoutThrowingByDefault(): void
     {
-        $constructor = self::createMethodMetadata(name: '__construct', parameters: ['App\\B']);
-        $a = self::createClassMetadata(name: 'App\\A', methods: ['__construct' => $constructor]);
+        $detector = new CircularDetector(new DependencyAnalyzer());
 
-        $constructorB = self::createMethodMetadata(name: '__construct', parameters: ['App\\A']);
-        $b = self::createClassMetadata(name: 'App\\B', methods: ['__construct' => $constructorB]);
-
-        $result = new DiscoveryResult(['App\\A' => $a, 'App\\B' => $b]);
-
-        $detector = new CircularDetector(new DependencyAnalyzer(), throwOnDetection: false);
-        $cycles = $detector->check($result);
-
-        self::assertNotEmpty($cycles);
+        self::assertSame(
+            ['App\\A → App\\B → App\\A'],
+            array_map(static fn(DependencyCycle $cycle): string => $cycle->chain(), $detector->check(self::mutualDependency())),
+        );
     }
 
-    public function testCheckThrowsWhenConfigured(): void
+    public function testThrowsWithTheFormattedChainWhenConfigured(): void
     {
-        $constructor = self::createMethodMetadata(name: '__construct', parameters: ['App\\B']);
-        $a = self::createClassMetadata(name: 'App\\A', methods: ['__construct' => $constructor]);
-
-        $constructorB = self::createMethodMetadata(name: '__construct', parameters: ['App\\A']);
-        $b = self::createClassMetadata(name: 'App\\B', methods: ['__construct' => $constructorB]);
-
-        $result = new DiscoveryResult(['App\\A' => $a, 'App\\B' => $b]);
-
         $detector = new CircularDetector(new DependencyAnalyzer(), throwOnDetection: true);
 
         $this->expectException(DiscoveryException::class);
-        $this->expectExceptionCode(1010);
+        $this->expectExceptionCode(8730);
+        $this->expectExceptionMessage('App\\A → App\\B → App\\A');
 
-        $detector->check($result);
+        $detector->check(self::mutualDependency());
     }
 
-    public function testCheckReturnsEmptyForAcyclicGraph(): void
+    public function testAcyclicResultNeitherThrowsNorReports(): void
     {
-        $a = self::createClassMetadata(name: 'App\\A');
-        $b = self::createClassMetadata(name: 'App\\B');
-
-        $result = new DiscoveryResult(['App\\A' => $a, 'App\\B' => $b]);
-
         $detector = new CircularDetector(new DependencyAnalyzer(), throwOnDetection: true);
-        $cycles = $detector->check($result);
-
-        self::assertEmpty($cycles);
-    }
-
-    public function testCheckDoesNotThrowForAcyclicGraph(): void
-    {
         $result = new DiscoveryResult([
             'App\\A' => self::createClassMetadata(name: 'App\\A'),
+            'App\\B' => self::createClassMetadata(name: 'App\\B', parent: 'App\\A'),
         ]);
 
-        $detector = new CircularDetector(new DependencyAnalyzer(), throwOnDetection: true);
+        self::assertSame([], $detector->check($result));
+    }
 
-        // Should not throw
-        $cycles = $detector->check($result);
-        self::assertEmpty($cycles);
+    private static function mutualDependency(): DiscoveryResult
+    {
+        return new DiscoveryResult([
+            'App\\A' => self::createClassMetadata(
+                name: 'App\\A',
+                methods: ['__construct' => self::createMethodMetadata(name: '__construct', parameters: ['b' => 'App\\B'])],
+            ),
+            'App\\B' => self::createClassMetadata(
+                name: 'App\\B',
+                methods: ['__construct' => self::createMethodMetadata(name: '__construct', parameters: ['a' => 'App\\A'])],
+            ),
+        ]);
     }
 }

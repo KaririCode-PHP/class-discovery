@@ -13,10 +13,12 @@ use KaririCode\ClassDiscovery\Contract\DiscoveryResult;
  * Typical configuration: Memory (L1) → File (L2).
  * On L1 miss + L2 hit, result is promoted to L1.
  *
- * @package KaririCode\ClassDiscovery\Cache
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.0.0
+ * ```php
+ * $scanner->setCacheStrategy(new ChainCacheStrategy(
+ *     new MemoryCacheStrategy(),
+ *     new FileCacheStrategy('/var/cache/discovery'), // a file hit is promoted to memory
+ * ));
+ * ```
  */
 final readonly class ChainCacheStrategy implements CacheStrategy
 {
@@ -28,7 +30,6 @@ final readonly class ChainCacheStrategy implements CacheStrategy
         $this->tiers = $tiers;
     }
 
-    #[\Override]
     public function get(string $key): ?DiscoveryResult
     {
         foreach ($this->tiers as $index => $tier) {
@@ -38,7 +39,6 @@ final readonly class ChainCacheStrategy implements CacheStrategy
                 for ($i = 0; $i < $index; $i++) {
                     $this->tiers[$i]->set($key, $result);
                 }
-
                 return $result;
             }
         }
@@ -46,7 +46,6 @@ final readonly class ChainCacheStrategy implements CacheStrategy
         return null;
     }
 
-    #[\Override]
     public function set(string $key, DiscoveryResult $result, int $ttl = 3600): void
     {
         foreach ($this->tiers as $tier) {
@@ -54,7 +53,6 @@ final readonly class ChainCacheStrategy implements CacheStrategy
         }
     }
 
-    #[\Override]
     public function delete(string $key): void
     {
         foreach ($this->tiers as $tier) {
@@ -62,7 +60,6 @@ final readonly class ChainCacheStrategy implements CacheStrategy
         }
     }
 
-    #[\Override]
     public function clear(): void
     {
         foreach ($this->tiers as $tier) {
@@ -70,7 +67,6 @@ final readonly class ChainCacheStrategy implements CacheStrategy
         }
     }
 
-    #[\Override]
     public function has(string $key): bool
     {
         foreach ($this->tiers as $tier) {
