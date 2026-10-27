@@ -30,6 +30,11 @@ enum AttributeTarget: int
 
 `ScannerType`, which has no external representation, remains a pure enum.
 
+## Alternatives Considered
+
+- **Pure enum plus a mapping function.** Rejected: duplicates the native constants and adds a translation that can drift.
+- **Integer constants.** Rejected: magic numbers (Spec §18).
+
 ## Consequences
 
 **Positive:**
@@ -41,6 +46,10 @@ enum AttributeTarget: int
 **Negative:**
 
 - Backed enums allow `::from()` / `::tryFrom()` which may hide invalid values
+
+## Addendum (2026-10) — Visibility; ScannerType removed
+
+`Visibility: string` is the second backed enum: its values are the JSON form of the metadata DPOs (E-001), an external contract in the sense of E-003. `ScannerType` was removed in 2.0.0 — no code used it, and three of its seven cases named scanners that do not exist.
 
 ## References
 

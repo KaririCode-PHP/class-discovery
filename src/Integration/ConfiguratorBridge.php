@@ -4,80 +4,166 @@ declare(strict_types=1);
 
 namespace KaririCode\ClassDiscovery\Integration;
 
-use KaririCode\ClassDiscovery\Cache\{ChainCacheStrategy, FileCacheStrategy, MemoryCacheStrategy};
-use KaririCode\ClassDiscovery\Contract\{CacheStrategy, Scanner};
-use KaririCode\ClassDiscovery\Scanner\{AttributeScanner, ComposerNamespaceResolver};
+use KaririCode\ClassDiscovery\Cache\ChainCacheStrategy;
+use KaririCode\ClassDiscovery\Cache\FileCacheStrategy;
+use KaririCode\ClassDiscovery\Cache\MemoryCacheStrategy;
+use KaririCode\ClassDiscovery\Contract\AttributeScanner as AttributeScannerContract;
+use KaririCode\ClassDiscovery\Contract\CacheStrategy;
+use KaririCode\ClassDiscovery\Exception\InsecureCacheDirectoryException;
+use KaririCode\ClassDiscovery\Exception\InvalidConfigurationException;
+use KaririCode\ClassDiscovery\Scanner\AttributeScanner;
 
 /**
  * Bridge to KaririCode\Configurator for discovery configuration.
  *
- * Reads discovery settings from the configurator and builds
- * the appropriate scanner with cache strategy.
+ * Builds the scanner and cache strategy from the `discovery` configuration
+ * section. Values are validated, not coerced: a wrong type fails fast with
+ * InvalidConfigurationException (8740) instead of silently becoming 0/false.
  *
  * Optional dependency: kariricode/configurator
  *
  * ## Configuration Keys
  *
- * | Key                    | Type   | Default     |
- * |------------------------|--------|-------------|
- * | discovery.cache.enabled | bool   | true        |
- * | discovery.cache.dir     | string | ./cache     |
- * | discovery.cache.ttl     | int    | 3600        |
- * | discovery.max_files     | int    | 10000       |
- * | discovery.max_file_size | int    | 10485760    |
- * | discovery.paths         | array  | ['src/']    |
+ * | Key             | Type                  | Default                                  |
+ * |-----------------|-----------------------|------------------------------------------|
+ * | max_file_size   | int                   | 10485760                                 |
+ * | max_files       | int                   | 10000                                    |
+ * | cache.enabled   | bool                  | true                                     |
+ * | cache.dir       | string                | <sys temp>/kariricode_discovery_<uid>    |
  *
- * @package KaririCode\ClassDiscovery\Integration
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.1.0
+ * Integers accept numeric strings and booleans accept "true"/"false"/"1"/"0",
+ * so values read from the environment work unchanged.
+ *
+ * ```php
+ * $scanner = ConfiguratorBridge::createScanner([
+ *     'max_files' => 5000,
+ *     'cache' => ['dir' => '/var/cache/discovery'],
+ * ]); // InvalidConfigurationException (8740) on a wrong type
+ * ```
  */
 final readonly class ConfiguratorBridge
 {
     /**
-     * Build a configured scanner from array configuration.
-     *
      * @param array<string, mixed> $config Configuration array
+     *
+     * @throws InvalidConfigurationException On an option of the wrong type
      */
-    public static function createScanner(array $config = []): Scanner
+    public static function createScanner(array $config = []): AttributeScannerContract
     {
-        // @phpstan-ignore cast.int (mixed from array<string,mixed>)
-        $maxFileSize = (int) ($config['max_file_size'] ?? 10 * 1024 * 1024);
-        // @phpstan-ignore cast.int (mixed from array<string,mixed>)
-        $maxFiles = (int) ($config['max_files'] ?? 10_000);
+        $cacheConfig = self::section($config, 'cache');
 
-        $resolver = new ComposerNamespaceResolver(
-            // @phpstan-ignore argument.type (mixed from array<string,mixed>, null-safe)
-            composerJsonPath: $config['composer_json'] ?? null,
-            includeDevAutoload: (bool) ($config['include_dev'] ?? false),
+        $scanner = new AttributeScanner(
+            maxFileSize: self::int($config, 'max_file_size', 10 * 1024 * 1024),
+            maxFiles: self::int($config, 'max_files', 10_000),
         );
 
-        $scanner = new AttributeScanner($resolver, $maxFileSize, $maxFiles);
-
-        // @phpstan-ignore offsetAccess.nonOffsetAccessible (mixed from array<string,mixed>)
-        $cacheEnabled = (bool) ($config['cache']['enabled'] ?? true);
-
-        if ($cacheEnabled) {
-            // @phpstan-ignore argument.type (mixed from array<string,mixed>)
-            $scanner->setCacheStrategy(self::createCacheStrategy($config['cache'] ?? []));
+        if (self::bool($cacheConfig, 'enabled', true)) {
+            $scanner->setCacheStrategy(self::createCacheStrategy($cacheConfig));
         }
 
         return $scanner;
     }
 
+
     /**
-     * Build cache strategy from configuration.
+     * Memory (L1) → File (L2). The default directory is per user, so two
+     * accounts on one host never share — or fight over — a cache directory.
      *
      * @param array<string, mixed> $cacheConfig Cache configuration
+     *
+     * @throws InvalidConfigurationException On an option of the wrong type
+     * @throws InsecureCacheDirectoryException When the cache directory is not private
      */
     public static function createCacheStrategy(array $cacheConfig = []): CacheStrategy
     {
-        // @phpstan-ignore cast.string (mixed from array<string,mixed>)
-        $dir = (string) ($cacheConfig['dir'] ?? sys_get_temp_dir() . '/kariricode_discovery');
+        $dir = self::optionalString($cacheConfig, 'dir') ?? self::defaultCacheDirectory();
 
         return new ChainCacheStrategy(
             new MemoryCacheStrategy(),
             new FileCacheStrategy($dir),
         );
+    }
+
+    private static function defaultCacheDirectory(): string
+    {
+        $user = function_exists('posix_geteuid') ? (string) posix_geteuid() : hash('xxh32', get_current_user());
+
+        return sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'kariricode_discovery_' . $user;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     *
+     * @return array<string, mixed>
+     */
+    private static function section(array $config, string $key): array
+    {
+        return self::arrayValue($key, $config[$key] ?? []);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function arrayValue(string $key, mixed $value): array
+    {
+        if (!is_array($value)) {
+            throw InvalidConfigurationException::option($key, 'array', get_debug_type($value));
+        }
+
+        /** @var array<string, mixed> $value */
+        return $value;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private static function int(array $config, string $key, int $default): int
+    {
+        return self::intValue($key, $config[$key] ?? $default);
+    }
+
+    private static function intValue(string $key, mixed $value): int
+    {
+        $int = filter_var($value, FILTER_VALIDATE_INT);
+        if ($int === false || is_bool($value)) {
+            throw InvalidConfigurationException::option($key, 'int', get_debug_type($value));
+        }
+
+        return $int;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private static function bool(array $config, string $key, bool $default): bool
+    {
+        return self::boolValue($key, $config[$key] ?? $default);
+    }
+
+    private static function boolValue(string $key, mixed $value): bool
+    {
+        $bool = filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+        if ($bool === null) {
+            throw InvalidConfigurationException::option($key, 'bool', get_debug_type($value));
+        }
+
+        return $bool;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private static function optionalString(array $config, string $key): ?string
+    {
+        return self::optionalStringValue($key, $config[$key] ?? null);
+    }
+
+    private static function optionalStringValue(string $key, mixed $value): ?string
+    {
+        if ($value !== null && !is_string($value)) {
+            throw InvalidConfigurationException::option($key, 'string', get_debug_type($value));
+        }
+
+        return $value;
     }
 }

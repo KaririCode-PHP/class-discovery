@@ -4,136 +4,153 @@ declare(strict_types=1);
 
 namespace KaririCode\ClassDiscovery\Tests\Integration;
 
-use KaririCode\ClassDiscovery\Contract\NamespaceResolver;
+use KaririCode\ClassDiscovery\Cache\MemoryCacheStrategy;
 use KaririCode\ClassDiscovery\Exception\DiscoveryException;
+use KaririCode\ClassDiscovery\Filter\StructuralFilter;
 use KaririCode\ClassDiscovery\Scanner\DirectoryScanner;
-use PHPUnit\Framework\Attributes\CoversClass;
+use KaririCode\ClassDiscovery\Tests\FixturePaths;
+use KaririCode\ClassDiscovery\Tests\TemporaryDirectories;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(DirectoryScanner::class)]
 final class DirectoryScannerIntegrationTest extends TestCase
 {
-    private string $fixtureDir;
-    private NamespaceResolver $resolver;
+    use FixturePaths;
+    use TemporaryDirectories;
+
+    private DirectoryScanner $scanner;
 
     protected function setUp(): void
     {
-        $this->fixtureDir = realpath(__DIR__ . '/../Fixture');
-
-        $this->resolver = new class ($this->fixtureDir) implements NamespaceResolver {
-            public function __construct(private readonly string $baseDir)
-            {
-            }
-
-            public function resolve(string $filePath): ?string
-            {
-                $realPath = realpath($filePath);
-                if ($realPath === false || ! str_starts_with($realPath, $this->baseDir)) {
-                    return null;
-                }
-
-                $relative = substr($realPath, \strlen($this->baseDir) + 1);
-                $relative = str_replace('.php', '', $relative);
-                $className = str_replace('/', '\\', $relative);
-
-                return 'KaririCode\\ClassDiscovery\\Tests\\Fixture\\' . $className;
-            }
-
-            public function addMapping(string $prefix, string $directory): self
-            {
-                return $this;
-            }
-        };
+        $this->scanner = new DirectoryScanner();
     }
 
-    public function testScanWithDefaultSettings(): void
+    public function testDefaultsDiscoverEveryFixture(): void
     {
-        $scanner = new DirectoryScanner($this->resolver);
-        $result = $scanner->scan([$this->fixtureDir]);
-
-        // Should find all fixture classes including nested
-        self::assertGreaterThanOrEqual(8, $result->count());
+        self::assertCount(12, $this->scanner->scan([self::fixturePath()]));
     }
 
-    public function testMaxDepthConstraint(): void
+    public function testNestedLevelIsWithinDepthOne(): void
     {
-        $scanner = new DirectoryScanner($this->resolver);
-        $scanner->setMaxDepth(1);
+        $result = $this->scanner->setMaxDepth(1)->scan([self::fixturePath()]);
 
-        // Depth 1 should still reach Nested/ (depth 0 = Fixture, depth 1 = Nested)
-        $result = $scanner->scan([$this->fixtureDir]);
-        self::assertGreaterThan(0, $result->count());
+        self::assertTrue($result->hasClass(self::fixtureClass('Nested\\DeepClass')));
     }
 
-    public function testPatternConstraint(): void
+    public function testMaxDepthExceededThrows(): void
     {
-        $scanner = new DirectoryScanner($this->resolver);
-        $scanner->setPattern('*Interface.php');
-
-        $result = $scanner->scan([$this->fixtureDir]);
-
-        // Only SampleInterface.php should match
-        self::assertGreaterThanOrEqual(1, $result->count());
-        foreach ($result as $meta) {
-            self::assertStringContainsString('Interface', $meta->shortName);
-        }
-    }
-
-    public function testSymlinksNotFollowedByDefault(): void
-    {
-        // Create a symlink inside fixture dir
-        $linkPath = $this->fixtureDir . '/link_test';
-        $targetPath = sys_get_temp_dir();
-
-        if (file_exists($linkPath)) {
-            unlink($linkPath);
-        }
-
-        // Only test if we can create symlinks
-        if (@symlink($targetPath, $linkPath)) {
-            try {
-                $scanner = new DirectoryScanner($this->resolver);
-                $scanner->setFollowSymlinks(false);
-
-                // Should not crash — symlink is just skipped
-                $result = $scanner->scan([$this->fixtureDir]);
-                self::assertGreaterThan(0, $result->count());
-            } finally {
-                unlink($linkPath);
-            }
-        } else {
-            self::markTestSkipped('Cannot create symlinks');
-        }
-    }
-
-    public function testThrowsForNonexistentPath(): void
-    {
-        $scanner = new DirectoryScanner($this->resolver);
+        $root = $this->temporaryDirectory();
+        mkdir($root . '/a/b/c', 0o700, true);
+        file_put_contents($root . '/a/b/c/Deep.php', "<?php\nnamespace T;\nclass Deep {}\n");
 
         $this->expectException(DiscoveryException::class);
-        $this->expectExceptionCode(1001);
+        $this->expectExceptionCode(8710);
 
-        $scanner->scan(['/absolutely/nonexistent/path']);
+        $this->scanner->setMaxDepth(1)->scan([$root]);
     }
 
-    public function testFluentInterface(): void
+    public function testPatternSelectsFilesByBasename(): void
     {
-        $scanner = new DirectoryScanner($this->resolver);
+        $result = $this->scanner->setPattern('*Interface.php')->scan([self::fixturePath()]);
 
-        $result = $scanner
-            ->setMaxDepth(5)
-            ->setPattern('*.php')
-            ->setFollowSymlinks(false)
-            ->scan([$this->fixtureDir]);
-
-        self::assertGreaterThan(0, $result->count());
+        self::assertSame([self::fixtureClass('SampleInterface')], array_keys($result->getClasses()));
     }
 
-    public function testScanSingleFile(): void
+    public function testSymlinksAreSkippedByDefault(): void
     {
-        $scanner = new DirectoryScanner($this->resolver);
-        $result = $scanner->scan([$this->fixtureDir . '/SampleEnum.php']);
+        $root = $this->temporaryDirectory();
+        file_put_contents($root . '/Real.php', "<?php\nnamespace T;\nclass Real {}\n");
+        $outside = $this->temporaryDirectory();
+        file_put_contents($outside . '/Outside.php', "<?php\nnamespace T;\nclass Outside {}\n");
+        symlink($outside, $root . '/linked');
 
-        self::assertGreaterThanOrEqual(1, $result->count());
+        self::assertSame(['T\\Real'], array_keys($this->scanner->scan([$root])->getClasses()));
+    }
+
+    public function testFollowedSymlinkInsideTheRootIsTraversed(): void
+    {
+        $root = $this->temporaryDirectory();
+        mkdir($root . '/real');
+        file_put_contents($root . '/real/Inner.php', "<?php\nnamespace T;\nclass Inner {}\n");
+        symlink($root . '/real', $root . '/alias');
+
+        self::assertTrue($this->scanner->setFollowSymlinks(true)->scan([$root])->hasClass('T\\Inner'));
+    }
+
+    public function testFollowedSymlinkToASiblingSharingThePrefixIsRejected(): void
+    {
+        // Regression (CWE-22): '/x/src-evil' used to pass a plain prefix check against root '/x/src'.
+        $base = $this->temporaryDirectory();
+        mkdir($base . '/src');
+        mkdir($base . '/src-evil');
+        file_put_contents($base . '/src-evil/Evil.php', "<?php\nnamespace T;\nclass Evil {}\n");
+        symlink($base . '/src-evil', $base . '/src/escape');
+
+        $this->expectException(DiscoveryException::class);
+        $this->expectExceptionCode(8702);
+
+        $this->scanner->setFollowSymlinks(true)->scan([$base . '/src']);
+    }
+
+    public function testRepeatedScansReuseTheCache(): void
+    {
+        // Regression (SRC-003): filters were re-added on every scan, drifting the cache key.
+        $this->scanner->addFilter(new StructuralFilter(isFinal: true))->setCacheStrategy(new MemoryCacheStrategy());
+
+        self::assertSame($this->scanner->scan([self::fixturePath()]), $this->scanner->scan([self::fixturePath()]));
+    }
+
+    public function testMissingPathThrows(): void
+    {
+        $this->expectException(DiscoveryException::class);
+        $this->expectExceptionCode(8701);
+
+        $this->scanner->scan(['/absolutely/nonexistent/path']);
+    }
+
+    public function testSingleFileMatchingThePattern(): void
+    {
+        self::assertTrue($this->scanner->scan([self::fixturePath('SampleEnum.php')])->hasClass(self::fixtureClass('SampleEnum')));
+    }
+
+    public function testDirectoryWithoutMatchesYieldsAnEmptyResult(): void
+    {
+        self::assertCount(0, $this->scanner->setPattern('*.inc')->scan([self::fixturePath()]));
+    }
+
+    public function testMaxDepthIsClampedToOne(): void
+    {
+        $result = $this->scanner->setMaxDepth(0)->scan([self::fixturePath()]);
+
+        self::assertTrue($result->hasClass(self::fixtureClass('Nested\\DeepClass')));
+    }
+
+    public function testFollowedLinkToTheRootItselfIsInsideAndBoundedByDepth(): void
+    {
+        $root = $this->temporaryDirectory();
+        file_put_contents($root . '/Real.php', "<?php\nnamespace T;\nclass Real {}\n");
+        symlink($root, $root . '/self');
+
+        $this->expectException(DiscoveryException::class);
+        $this->expectExceptionCode(8710); // a cycle, not an escape (1003)
+
+        $this->scanner->setFollowSymlinks(true)->setMaxDepth(3)->scan([$root]);
+    }
+
+    public function testClearCacheWithoutACacheIsANoOp(): void
+    {
+        $this->scanner->clearCache();
+
+        self::assertCount(12, $this->scanner->scan([self::fixturePath()]));
+    }
+
+    public function testClearCacheEmptiesTheConfiguredCache(): void
+    {
+        $this->scanner->setCacheStrategy(new MemoryCacheStrategy());
+        $first = $this->scanner->scan([self::fixturePath()]);
+        self::assertSame($first, $this->scanner->scan([self::fixturePath()]), 'served from the cache');
+
+        $this->scanner->clearCache();
+
+        self::assertNotSame($first, $this->scanner->scan([self::fixturePath()]));
     }
 }

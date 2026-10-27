@@ -4,27 +4,33 @@ declare(strict_types=1);
 
 namespace KaririCode\ClassDiscovery\Scanner;
 
-use KaririCode\ClassDiscovery\Contract\{
-    CacheStrategy,
-    ClassFilter,
-    DirectoryScanner as DirectoryScannerContract,
-    DiscoveryResult as DiscoveryResultContract,
-    NamespaceResolver,
-};
-use KaririCode\ClassDiscovery\Exception\DiscoveryException;
+use KaririCode\ClassDiscovery\Contract\CacheStrategy;
+use KaririCode\ClassDiscovery\Contract\ClassFilter;
+use KaririCode\ClassDiscovery\Contract\DirectoryScanner as DirectoryScannerContract;
+use KaririCode\ClassDiscovery\Contract\DiscoveryResult as DiscoveryResultContract;
+use KaririCode\ClassDiscovery\Exception\PathNotFoundException;
+use KaririCode\ClassDiscovery\Exception\ScanLimitExceededException;
+use KaririCode\ClassDiscovery\Exception\SymlinkEscapeException;
 use KaririCode\ClassDiscovery\Result\DiscoveryResult;
 
 /**
  * Recursive directory scanner with depth, symlink, and pattern constraints.
  *
  * Collects PHP files respecting max depth, glob pattern, and symlink policy,
- * then delegates token-based parsing to FileScanner. This two-phase approach
- * keeps traversal policy separate from parsing logic (SRP).
+ * then delegates token-based parsing to a FileScanner built per scan, so filters
+ * and cache are applied exactly once per call (SRP: traversal policy here,
+ * parsing there).
  *
- * @package KaririCode\ClassDiscovery\Scanner
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.0.0
+ * Symlinks are skipped by default. When followed, a link must resolve *inside*
+ * the scan root — the containment check is separator-aware, so `/app/src-evil`
+ * is not accepted as being inside `/app/src` (fail closed, CWE-22).
+ *
+ * ```php
+ * $result = new DirectoryScanner()
+ *     ->setMaxDepth(4)
+ *     ->setFollowSymlinks(false)
+ *     ->scan(['src/']);
+ * ```
  */
 final class DirectoryScanner implements DirectoryScannerContract
 {
@@ -32,63 +38,33 @@ final class DirectoryScanner implements DirectoryScannerContract
     private string $pattern = '*.php';
     private bool $followSymlinks = false;
 
-    /** @var array<ClassFilter> */
+    /** @var list<ClassFilter> */
     private array $filters = [];
-
     private ?CacheStrategy $cache = null;
-    private readonly FileScanner $fileScanner;
 
-    public function __construct(
-        /** @phpstan-ignore property.onlyWritten (stored for future use / interface requirement) */
-        private readonly NamespaceResolver $namespaceResolver,
-    ) {
-        $this->fileScanner = new FileScanner($namespaceResolver);
-    }
-
-    #[\Override]
     public function scan(array $paths): DiscoveryResultContract
     {
-        // Collect files respecting depth/pattern/symlink constraints
         $filePaths = [];
         foreach ($paths as $path) {
-            $realPath = realpath($path);
-            if ($realPath === false) {
-                throw DiscoveryException::pathNotFound($path);
-            }
-
-            if (is_file($realPath) && $this->matchesPattern($realPath)) {
-                $filePaths[] = $realPath;
-
-                continue;
-            }
-
-            if (is_dir($realPath)) {
-                $filePaths = array_merge(
-                    $filePaths,
-                    $this->collectFromDirectory($realPath, $realPath, 0),
-                );
-            }
+            $filePaths = [...$filePaths, ...$this->collect($path)];
         }
 
         if ($filePaths === []) {
             return new DiscoveryResult();
         }
 
-        // Apply filters and cache to inner scanner
+        $engine = new FileScanner();
         foreach ($this->filters as $filter) {
-            $this->fileScanner->addFilter($filter);
+            $engine->addFilter($filter);
         }
 
         if ($this->cache !== null) {
-            $this->fileScanner->setCacheStrategy($this->cache);
+            $engine->setCacheStrategy($this->cache);
         }
 
-        // Pass individual file paths — FileScanner::collectPhpFiles handles
-        // single files via its is_file() branch, bypassing its own traversal.
-        return $this->fileScanner->scan($filePaths);
+        return $engine->scan($filePaths);
     }
 
-    #[\Override]
     public function addFilter(ClassFilter $filter): self
     {
         $this->filters[] = $filter;
@@ -96,7 +72,6 @@ final class DirectoryScanner implements DirectoryScannerContract
         return $this;
     }
 
-    #[\Override]
     public function setCacheStrategy(CacheStrategy $cache): self
     {
         $this->cache = $cache;
@@ -104,13 +79,11 @@ final class DirectoryScanner implements DirectoryScannerContract
         return $this;
     }
 
-    #[\Override]
     public function clearCache(): void
     {
-        $this->fileScanner->clearCache();
+        $this->cache?->clear();
     }
 
-    #[\Override]
     public function setMaxDepth(int $depth): self
     {
         $this->maxDepth = max(1, $depth);
@@ -118,7 +91,6 @@ final class DirectoryScanner implements DirectoryScannerContract
         return $this;
     }
 
-    #[\Override]
     public function setPattern(string $pattern): self
     {
         $this->pattern = $pattern;
@@ -126,7 +98,6 @@ final class DirectoryScanner implements DirectoryScannerContract
         return $this;
     }
 
-    #[\Override]
     public function setFollowSymlinks(bool $follow): self
     {
         $this->followSymlinks = $follow;
@@ -135,64 +106,52 @@ final class DirectoryScanner implements DirectoryScannerContract
     }
 
     /**
-     * Recursively collect files from a directory with constraint enforcement.
+     * @return list<string>
      *
-     * @param string $directory Current directory to scan
-     * @param string $root      Original scan root (for symlink containment)
-     * @param int    $depth     Current recursion depth
+     * @throws PathNotFoundException
+     */
+    private function collect(string $path): array
+    {
+        $realPath = realpath($path);
+        if ($realPath === false) {
+            throw PathNotFoundException::at($path);
+        }
+
+        if (is_dir($realPath)) {
+            return $this->collectFromDirectory($realPath, $realPath, 0);
+        }
+
+        return is_file($realPath) && $this->matchesPattern($realPath) ? [$realPath] : [];
+    }
+
+    /**
+     * @return list<string>
      *
-     * @return array<string> Collected file paths
-     *
-     * @throws DiscoveryException On max depth exceeded or symlink escape
+     * @throws ScanLimitExceededException|SymlinkEscapeException
      */
     private function collectFromDirectory(string $directory, string $root, int $depth): array
     {
         if ($depth > $this->maxDepth) {
-            throw DiscoveryException::maxDepthExceeded($depth, $this->maxDepth);
+            throw ScanLimitExceededException::depth($depth, $this->maxDepth);
         }
 
-        $files = [];
-        $entries = @scandir($directory);
-
+        $entries = is_readable($directory) ? scandir($directory) : false;
         if ($entries === false) {
             return [];
         }
 
-        foreach ($entries as $entry) {
-            if ($entry === '.' || $entry === '..') {
+        $files = [];
+        foreach (array_diff($entries, ['.', '..']) as $entry) {
+            $path = $this->resolveEntry($directory . DIRECTORY_SEPARATOR . $entry, $root);
+
+            if ($path === null) {
                 continue;
             }
 
-            $fullPath = $directory . DIRECTORY_SEPARATOR . $entry;
-
-            // Symlink handling
-            if (is_link($fullPath)) {
-                if (! $this->followSymlinks) {
-                    continue;
-                }
-
-                $target = realpath($fullPath);
-                if ($target === false || ! str_starts_with($target, $root)) {
-                    throw DiscoveryException::symlinkEscape($fullPath, $target ?: 'unresolvable', $root);
-                }
-
-                $fullPath = $target;
-            }
-
-            // $fullPath is guaranteed to be non-empty-string at this point.
-            // Psalm cannot infer this after the symlink branch, so we assert.
-            /** @var non-empty-string $fullPath */
-            if (is_dir($fullPath)) {
-                $files = array_merge(
-                    $files,
-                    $this->collectFromDirectory($fullPath, $root, $depth + 1),
-                );
-
-                continue;
-            }
-
-            if (is_file($fullPath) && $this->matchesPattern($fullPath)) {
-                $files[] = $fullPath;
+            if (is_dir($path)) {
+                $files = [...$files, ...$this->collectFromDirectory($path, $root, $depth + 1)];
+            } elseif (is_file($path) && $this->matchesPattern($path)) {
+                $files[] = $path;
             }
         }
 
@@ -200,8 +159,36 @@ final class DirectoryScanner implements DirectoryScannerContract
     }
 
     /**
-     * Check if a file path matches the configured glob pattern.
+     * Applies the symlink policy to one directory entry.
+     *
+     * @return string|null The path to traverse, or null to skip the entry
+     *
+     * @throws SymlinkEscapeException When a followed link resolves outside the scan root
      */
+    private function resolveEntry(string $path, string $root): ?string
+    {
+        if (!is_link($path)) {
+            return $path;
+        }
+
+        if (!$this->followSymlinks) {
+            return null;
+        }
+
+        $target = realpath($path);
+        if ($target === false || !self::isWithin($target, $root)) {
+            throw SymlinkEscapeException::outside($path, $target === false ? 'unresolvable' : $target, $root);
+        }
+
+        return $target;
+    }
+
+    private static function isWithin(string $path, string $root): bool
+    {
+        return $path === $root
+            || str_starts_with($path, rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR);
+    }
+
     private function matchesPattern(string $filePath): bool
     {
         return fnmatch($this->pattern, basename($filePath));

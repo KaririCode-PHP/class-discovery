@@ -6,44 +6,48 @@ namespace KaririCode\ClassDiscovery\Tests\Unit\Enum;
 
 use Attribute;
 use KaririCode\ClassDiscovery\Enum\AttributeTarget;
-use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(AttributeTarget::class)]
 final class AttributeTargetTest extends TestCase
 {
-    public function testMapsToNativeConstants(): void
+    #[DataProvider('nativeTargets')]
+    public function testEachCaseMirrorsItsNativeConstant(int $native, AttributeTarget $expected): void
     {
-        self::assertSame(Attribute::TARGET_CLASS, AttributeTarget::Class_->value);
-        self::assertSame(Attribute::TARGET_METHOD, AttributeTarget::Method->value);
-        self::assertSame(Attribute::TARGET_PROPERTY, AttributeTarget::Property->value);
-        self::assertSame(Attribute::TARGET_PARAMETER, AttributeTarget::Parameter->value);
-        self::assertSame(Attribute::TARGET_CLASS_CONSTANT, AttributeTarget::ClassConstant->value);
-        self::assertSame(Attribute::TARGET_ALL, AttributeTarget::All->value);
+        self::assertSame($expected, AttributeTarget::from($native));
     }
 
-    public function testFromNativeValue(): void
+    /**
+     * @return \Generator<string, array{int, AttributeTarget}>
+     */
+    public static function nativeTargets(): \Generator
     {
-        $target = AttributeTarget::from(Attribute::TARGET_METHOD);
-
-        self::assertSame(AttributeTarget::Method, $target);
+        yield 'class' => [Attribute::TARGET_CLASS, AttributeTarget::Class_];
+        yield 'method' => [Attribute::TARGET_METHOD, AttributeTarget::Method];
+        yield 'property' => [Attribute::TARGET_PROPERTY, AttributeTarget::Property];
+        yield 'parameter' => [Attribute::TARGET_PARAMETER, AttributeTarget::Parameter];
+        yield 'class constant' => [Attribute::TARGET_CLASS_CONSTANT, AttributeTarget::ClassConstant];
+        yield 'all' => [Attribute::TARGET_ALL, AttributeTarget::All];
     }
 
-    public function testTryFromInvalidReturnsNull(): void
+    public function testEveryCaseIsCoveredByTheMapping(): void
     {
-        self::assertNull(AttributeTarget::tryFrom(99999));
+        self::assertCount(count(AttributeTarget::cases()), iterator_to_array(self::nativeTargets()));
     }
 
-    public function testIsBackedEnum(): void
+    #[DataProvider('unknownTargets')]
+    public function testTryFromRejectsValuesWithoutACase(int $value): void
     {
-        $ref = new \ReflectionEnum(AttributeTarget::class);
-
-        self::assertTrue($ref->isBacked());
-        self::assertSame('int', $ref->getBackingType()->getName());
+        self::assertNull(AttributeTarget::tryFrom($value));
     }
 
-    public function testCaseCount(): void
+    /**
+     * @return \Generator<string, array{int}>
+     */
+    public static function unknownTargets(): \Generator
     {
-        self::assertCount(6, AttributeTarget::cases());
+        yield 'zero' => [0];
+        yield 'function target (not class-scoped)' => [Attribute::TARGET_FUNCTION];
+        yield 'out of range' => [99999];
     }
 }

@@ -12,10 +12,15 @@ use KaririCode\ClassDiscovery\Result\ClassMetadata;
  * Applied during scanning to exclude non-matching classes before
  * result construction. Multiple filters compose with AND logic.
  *
- * @package KaririCode\ClassDiscovery\Contract
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.0.0
+ * ```php
+ * final readonly class OnlyControllers implements ClassFilter
+ * {
+ *     public function accept(ClassMetadata $metadata): bool
+ *     {
+ *         return str_ends_with($metadata->shortName, 'Controller');
+ *     }
+ * }
+ * ```
  */
 interface ClassFilter
 {

@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace KaririCode\ClassDiscovery\Tests\Unit\Result;
 
 use KaririCode\ClassDiscovery\Enum\AttributeTarget;
+use KaririCode\ClassDiscovery\Enum\Visibility;
 use KaririCode\ClassDiscovery\Result\{MethodMetadata};
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
-use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(MethodMetadata::class)]
 final class MethodMetadataTest extends TestCase
 {
     use MetadataFactory;
@@ -20,7 +19,7 @@ final class MethodMetadataTest extends TestCase
         $method = new MethodMetadata(name: 'execute');
 
         self::assertSame('execute', $method->name);
-        self::assertSame('public', $method->visibility);
+        self::assertSame(Visibility::Public, $method->visibility);
         self::assertFalse($method->isStatic);
         self::assertFalse($method->isAbstract);
         self::assertNull($method->returnType);
@@ -33,19 +32,19 @@ final class MethodMetadataTest extends TestCase
         $attr = self::createAttributeMetadata(target: AttributeTarget::Method);
         $method = new MethodMetadata(
             name: '__construct',
-            visibility: 'private',
+            visibility: Visibility::Private,
             isStatic: false,
             isAbstract: false,
             returnType: 'void',
             attributes: ['App\\Route' => $attr],
-            parameters: ['string', 'int'],
+            parameters: ['name' => 'string', 'value' => 'int'],
         );
 
         self::assertSame('__construct', $method->name);
-        self::assertSame('private', $method->visibility);
+        self::assertSame(Visibility::Private, $method->visibility);
         self::assertSame('void', $method->returnType);
         self::assertCount(1, $method->attributes);
-        self::assertSame(['string', 'int'], $method->parameters);
+        self::assertSame(['name' => 'string', 'value' => 'int'], $method->parameters);
     }
 
     public function testHasAttribute(): void

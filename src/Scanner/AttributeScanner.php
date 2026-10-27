@@ -4,94 +4,98 @@ declare(strict_types=1);
 
 namespace KaririCode\ClassDiscovery\Scanner;
 
-use KaririCode\ClassDiscovery\Contract\{
-    AttributeScanner as AttributeScannerContract,
-    CacheStrategy,
-    ClassFilter,
-    DiscoveryResult as DiscoveryResultContract,
-    NamespaceResolver,
-};
+use KaririCode\ClassDiscovery\Contract\AttributeScanner as AttributeScannerContract;
+use KaririCode\ClassDiscovery\Contract\CacheStrategy;
+use KaririCode\ClassDiscovery\Contract\ClassFilter;
+use KaririCode\ClassDiscovery\Contract\DiscoveryResult as DiscoveryResultContract;
 use KaririCode\ClassDiscovery\Filter\AttributeFilter;
 
 /**
  * PHP 8+ attribute-specialized scanner.
  *
- * Composes FileScanner with attribute-specific filtering:
- * targeted attribute matching and multi-attribute OR scanning.
- *
- * Uses composition (ADR-005) to avoid fragile base class issues
- * while reusing FileScanner's token-based parsing engine.
- *
- * @package KaririCode\ClassDiscovery\Scanner
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.1.0
+ * Composes FileScanner (ADR-005). Filters registered with addFilter() persist
+ * across calls; the attribute filter of scanForAttribute()/scanForAttributes()
+ * applies to that call only — each call builds a fresh engine, so a previous
+ * call's attribute never narrows the next one.
  */
 final class AttributeScanner implements AttributeScannerContract
 {
-    private readonly FileScanner $fileScanner;
+    /** @var list<ClassFilter> */
+    private array $filters = [];
     private ?CacheStrategy $cache = null;
 
     public function __construct(
-        private readonly NamespaceResolver $namespaceResolver,
-        private readonly int $maxFileSize = 10 * 1024 * 1024, // 10MB
+        private readonly int $maxFileSize = 10 * 1024 * 1024,
         private readonly int $maxFiles = 10_000,
-    ) {
-        $this->fileScanner = new FileScanner($namespaceResolver, $maxFileSize, $maxFiles);
-    }
+    ) {}
 
-    #[\Override]
     public function scan(array $paths): DiscoveryResultContract
     {
-        return $this->fileScanner->scan($paths);
+        return $this->scanWith($paths);
     }
 
-    #[\Override]
     public function scanForAttribute(string $attributeClass, array $paths): DiscoveryResultContract
     {
-        // Fresh scanner to avoid filter accumulation between calls
-        $scanner = new FileScanner($this->namespaceResolver, $this->maxFileSize, $this->maxFiles);
-        if ($this->cache !== null) {
-            $scanner->setCacheStrategy($this->cache);
-        }
-        $scanner->addFilter(new AttributeFilter($attributeClass));
-
-        return $scanner->scan($paths);
+        return $this->scanWith($paths, new AttributeFilter($attributeClass));
     }
 
-    #[\Override]
     public function scanForAttributes(array $attributeClasses, array $paths): DiscoveryResultContract
     {
-        // Fresh scanner to avoid filter accumulation between calls
-        $scanner = new FileScanner($this->namespaceResolver, $this->maxFileSize, $this->maxFiles);
-        if ($this->cache !== null) {
-            $scanner->setCacheStrategy($this->cache);
-        }
-        $scanner->addFilter(new AttributeFilter(...$attributeClasses));
-
-        return $scanner->scan($paths);
+        return $this->scanWith($paths, new AttributeFilter(...$attributeClasses));
     }
 
-    #[\Override]
+    /**
+     * Class finder shaped for typed-closure integration: KC Observability takes
+     * `'discovery' => $scanner->discover(...)` and calls it with FQCN attributes
+     * such as `Traced::class`. Never loads the scanned code.
+     *
+     * ```php
+     * $finder = $scanner->discover(...);
+     * $finder(Route::class, ['src/']); // ['App\Http\HomeController', ...]
+     * ```
+     */
+    public function discover(string $attributeClass, array $paths): array
+    {
+        return array_keys($this->scanForAttribute($attributeClass, $paths)->getClasses());
+    }
+
     public function addFilter(ClassFilter $filter): self
     {
-        $this->fileScanner->addFilter($filter);
+        $this->filters[] = $filter;
 
         return $this;
     }
 
-    #[\Override]
     public function setCacheStrategy(CacheStrategy $cache): self
     {
         $this->cache = $cache;
-        $this->fileScanner->setCacheStrategy($cache);
 
         return $this;
     }
 
-    #[\Override]
     public function clearCache(): void
     {
-        $this->fileScanner->clearCache();
+        $this->cache?->clear();
+    }
+
+    /**
+     * @param array<string> $paths
+     */
+    private function scanWith(array $paths, ClassFilter ...$callFilters): DiscoveryResultContract
+    {
+        $engine = new FileScanner(
+            maxFileSize: $this->maxFileSize,
+            maxFiles: $this->maxFiles,
+        );
+
+        foreach ([...$this->filters, ...$callFilters] as $filter) {
+            $engine->addFilter($filter);
+        }
+
+        if ($this->cache !== null) {
+            $engine->setCacheStrategy($this->cache);
+        }
+
+        return $engine->scan($paths);
     }
 }

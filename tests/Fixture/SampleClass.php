@@ -11,16 +11,11 @@ class SampleClass extends SampleAbstractClass implements SampleInterface
     public function __construct(
         private readonly string $name,
         private readonly int $value,
-    ) {
-    }
+    ) {}
 
-    public function handle(): void
-    {
-    }
+    public function handle(): void {}
 
-    public function process(): void
-    {
-    }
+    public function process(): void {}
 
     public function getName(): string
     {

@@ -8,21 +8,22 @@ use KaririCode\ClassDiscovery\Filter\{CompositeFilter, InterfaceFilter, Namespac
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
 use PHPUnit\Framework\TestCase;
 
-#[\PHPUnit\Framework\Attributes\CoversClass(CompositeFilter::class)]
-#[\PHPUnit\Framework\Attributes\UsesClass(NamespaceFilter::class)]
-#[\PHPUnit\Framework\Attributes\UsesClass(StructuralFilter::class)]
-#[\PHPUnit\Framework\Attributes\UsesClass(InterfaceFilter::class)]
 final class CompositeFilterTest extends TestCase
 {
     use MetadataFactory;
+
+    // NOTE: $requireAll is the first constructor parameter followed by a
+    // variadic ...$filters. PHP forbids positional arguments after a named
+    // one, so $requireAll must be passed positionally when filters follow.
 
     public function testOrLogicAnyFilterPasses(): void
     {
         $meta = self::createClassMetadata(isFinal: true, namespace: 'App\\Service');
 
-        $filter = CompositeFilter::any(
+        $filter = new CompositeFilter(
+            false,
             new NamespaceFilter('App\\Controller'),  // Fails
-            new StructuralFilter(isFinal: true),     // Passes
+            new StructuralFilter(isFinal: true),      // Passes
         );
 
         self::assertTrue($filter->accept($meta));
@@ -32,7 +33,8 @@ final class CompositeFilterTest extends TestCase
     {
         $meta = self::createClassMetadata(isFinal: false, namespace: 'App\\Service');
 
-        $filter = CompositeFilter::any(
+        $filter = new CompositeFilter(
+            false,
             new NamespaceFilter('App\\Controller'),
             new StructuralFilter(isFinal: true),
         );
@@ -48,7 +50,8 @@ final class CompositeFilterTest extends TestCase
             interfaces: ['Countable'],
         );
 
-        $filter = CompositeFilter::all(
+        $filter = new CompositeFilter(
+            true,
             new NamespaceFilter('App\\Controller'),
             new StructuralFilter(isFinal: true),
             new InterfaceFilter('Countable'),
@@ -65,7 +68,8 @@ final class CompositeFilterTest extends TestCase
             interfaces: [],
         );
 
-        $filter = CompositeFilter::all(
+        $filter = new CompositeFilter(
+            true,
             new NamespaceFilter('App\\Controller'),
             new InterfaceFilter('Countable'),  // Fails
         );
@@ -75,10 +79,10 @@ final class CompositeFilterTest extends TestCase
 
     public function testEmptyFiltersAcceptAll(): void
     {
-        $meta = self::createClassMetadata();
+        $orFilter = new CompositeFilter(false);
+        $andFilter = new CompositeFilter(true);
 
-        $orFilter = CompositeFilter::any();
-        $andFilter = CompositeFilter::all();
+        $meta = self::createClassMetadata();
 
         self::assertTrue($orFilter->accept($meta));
         self::assertTrue($andFilter->accept($meta));

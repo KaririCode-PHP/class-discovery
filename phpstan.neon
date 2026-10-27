@@ -1,0 +1,21 @@
+includes:
+    - vendor/tomasvotruba/cognitive-complexity/config/extension.neon
+    - vendor/phpstan/phpstan-phpunit/extension.neon
+    - vendor/phpstan/phpstan-phpunit/rules.neon
+
+parameters:
+    level: max
+    phpVersion: 80400
+    paths:
+        - src
+        - tests
+    excludePaths:
+        # Fixtures are inputs to the scanners (read as tokens, or loaded by ReflectionScanner);
+        # they are test data, not code under analysis. Same for the reflection specimen.
+        - tests/Fixture
+        - tests/Specimen
+    # Spec V4.x §13 — cognitive complexity ≤ 15 per method (Campbell/SonarSource).
+    # The spec budgets methods only; the class ceiling is set out of the way.
+    cognitive_complexity:
+        function: 15
+        class: 200

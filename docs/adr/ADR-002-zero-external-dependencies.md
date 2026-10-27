@@ -19,6 +19,12 @@ The KaririCode Framework follows a zero-external-dependency policy for core infr
 
 ClassDiscovery depends exclusively on PHP 8.4+ standard library. Integration with external systems (PSR-16 cache, PSR-11 container, Configurator) is provided via optional bridge classes that type-hint `object` with PHPStan annotations.
 
+## Alternatives Considered
+
+- **Depend on mature libraries** (php-parser, symfony/finder). Rejected: a foundation component would impose their versions on every application.
+- **Vendor copies of those libraries.** Rejected: unowned code to patch and relicense.
+- **No dependency at all, even on the ecosystem contract.** Rejected in 2026-10: Spec V4.3.3 §31 routes coupling through kariricode/contract (addendum).
+
 ## Consequences
 
 **Positive:**
@@ -39,6 +45,14 @@ ClassDiscovery depends exclusively on PHP 8.4+ standard library. Integration wit
 - `@phpstan-param` annotations provide static analysis coverage for bridge classes
 - `composer.json` `suggest` section documents optional integrations
 - Built-in cache strategies (Memory, File, Chain) cover 95% of use cases without external packages
+
+## Addendum (2026-10) — The ecosystem contract
+
+**Context.** Spec V4.3.3 §31 routes every coupling between KaririCode components through kariricode/contract, and §8.4 requires each exception to implement one of its families so an edge maps failures without knowing the package.
+
+**Decision.** Require `kariricode/contract ^2.11` — interfaces only, no runtime code. Third-party packages stay out of `require`; PSR interfaces remain the other exception: PSR-20 (`psr/clock`, required — cache expiry reads an injectable clock) and PSR-16 (`CacheBridge`, suggested).
+
+**Consequences.** The package has one runtime dependency inside the ecosystem. Contract 2.11.0 must be published before this release (Packagist shows 2.8.6).
 
 ## References
 

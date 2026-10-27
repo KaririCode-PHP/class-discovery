@@ -4,19 +4,24 @@ declare(strict_types=1);
 
 namespace KaririCode\ClassDiscovery\Result;
 
+use KaririCode\ClassDiscovery\Enum\Visibility;
+
 /**
  * Immutable metadata snapshot of a discovered method.
  *
- * @package KaririCode\ClassDiscovery\Result
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.1.0
+ * ```php
+ * foreach ($metadata->methods as $method) {
+ *     if ($method->hasAttribute(Traced::class)) {
+ *         // instrument $method->name
+ *     }
+ * }
+ * ```
  */
 final readonly class MethodMetadata
 {
     /**
      * @param string                           $name        Method name
-     * @param string                           $visibility  'public'|'protected'|'private'
+     * @param Visibility                           $visibility
      * @param bool                             $isStatic    Whether method is static
      * @param bool                             $isAbstract  Whether method is abstract
      * @param string|null                      $returnType  Return type declaration
@@ -25,14 +30,13 @@ final readonly class MethodMetadata
      */
     public function __construct(
         public string $name,
-        public string $visibility = 'public',
+        public Visibility $visibility = Visibility::Public,
         public bool $isStatic = false,
         public bool $isAbstract = false,
         public ?string $returnType = null,
         public array $attributes = [],
         public array $parameters = [],
-    ) {
-    }
+    ) {}
 
     public function hasAttribute(string $attributeClass): bool
     {
