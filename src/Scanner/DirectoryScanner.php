@@ -39,7 +39,6 @@ final class DirectoryScanner implements DirectoryScannerContract
     private readonly FileScanner $fileScanner;
 
     public function __construct(
-        /** @phpstan-ignore property.onlyWritten (stored for future use / interface requirement) */
         private readonly NamespaceResolver $namespaceResolver,
     ) {
         $this->fileScanner = new FileScanner($namespaceResolver);

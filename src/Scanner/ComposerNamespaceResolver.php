@@ -100,11 +100,40 @@ final class ComposerNamespaceResolver implements NamespaceResolver
 
         $baseDir = \dirname(realpath($path) ?: $path);
 
-        $this->extractPsr4Mappings($data['autoload']['psr-4'] ?? [], $baseDir); // @phpstan-ignore offsetAccess.nonOffsetAccessible, argument.type
+        $this->extractPsr4Mappings($this->psr4Section($data, 'autoload'), $baseDir);
 
         if ($includeDevAutoload) {
-            $this->extractPsr4Mappings($data['autoload-dev']['psr-4'] ?? [], $baseDir);
+            $this->extractPsr4Mappings($this->psr4Section($data, 'autoload-dev'), $baseDir);
         }
+    }
+
+    /**
+     * Read the PSR-4 map of an autoload section, skipping entries that are not strings.
+     *
+     * @param array<mixed> $data Decoded composer.json
+     *
+     * @return array<string, string|array<string>>
+     */
+    private function psr4Section(array $data, string $section): array
+    {
+        $autoload = $data[$section] ?? null;
+        $psr4 = \is_array($autoload) ? ($autoload['psr-4'] ?? null) : null;
+
+        if (! \is_array($psr4)) {
+            return [];
+        }
+
+        $mappings = [];
+
+        foreach ($psr4 as $prefix => $paths) {
+            if (\is_string($paths)) {
+                $mappings[(string) $prefix] = $paths;
+            } elseif (\is_array($paths)) {
+                $mappings[(string) $prefix] = array_values(array_filter($paths, \is_string(...)));
+            }
+        }
+
+        return $mappings;
     }
 
     /**
