@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace KaririCode\ClassDiscovery\Tests\Unit\Result;
 
 use KaririCode\ClassDiscovery\Enum\AttributeTarget;
+use KaririCode\ClassDiscovery\Enum\Visibility;
 use KaririCode\ClassDiscovery\Result\{PropertyMetadata};
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
-use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(PropertyMetadata::class)]
 final class PropertyMetadataTest extends TestCase
 {
     use MetadataFactory;
@@ -20,7 +19,7 @@ final class PropertyMetadataTest extends TestCase
         $prop = new PropertyMetadata(name: 'id');
 
         self::assertSame('id', $prop->name);
-        self::assertSame('public', $prop->visibility);
+        self::assertSame(Visibility::Public, $prop->visibility);
         self::assertNull($prop->type);
         self::assertFalse($prop->isReadonly);
         self::assertFalse($prop->isStatic);
@@ -34,7 +33,7 @@ final class PropertyMetadataTest extends TestCase
         $attr = self::createAttributeMetadata(target: AttributeTarget::Property);
         $prop = new PropertyMetadata(
             name: 'status',
-            visibility: 'protected',
+            visibility: Visibility::Protected,
             type: 'string',
             isReadonly: true,
             isStatic: false,
@@ -44,7 +43,7 @@ final class PropertyMetadataTest extends TestCase
         );
 
         self::assertSame('status', $prop->name);
-        self::assertSame('protected', $prop->visibility);
+        self::assertSame(Visibility::Protected, $prop->visibility);
         self::assertSame('string', $prop->type);
         self::assertTrue($prop->isReadonly);
         self::assertTrue($prop->hasDefault);

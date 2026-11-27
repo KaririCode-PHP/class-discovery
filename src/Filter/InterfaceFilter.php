@@ -8,21 +8,21 @@ use KaririCode\ClassDiscovery\Contract\ClassFilter;
 use KaririCode\ClassDiscovery\Result\ClassMetadata;
 
 /**
- * Filters classes by implemented interface.
+ * Keeps classes that declare the given interface — the discovery side of
+ * "every implementation of X" (subscribers, handlers, plugins). Matches the
+ * names the scanner records: FQCNs in both modes; an interface inherited
+ * from a parent is visible only in reflection mode.
  *
- * @package KaririCode\ClassDiscovery\Filter
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.0.0
+ * ```php
+ * $scanner->addFilter(new InterfaceFilter(EventSubscriber::class));
+ * ```
  */
 final readonly class InterfaceFilter implements ClassFilter
 {
     public function __construct(
         private string $interfaceName,
-    ) {
-    }
+    ) {}
 
-    #[\Override]
     public function accept(ClassMetadata $metadata): bool
     {
         return $metadata->implementsInterface($this->interfaceName);

@@ -22,10 +22,12 @@ namespace KaririCode\ClassDiscovery\Contract;
  * | KaririCode\WebSocket  | #[WebSocketRoute], #[OnConnect], #[OnMessage] |
  * | KaririCode\I18n       | #[TranslatableResource]                     |
  *
- * @package KaririCode\ClassDiscovery\Contract
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.1.0
+ * ```php
+ * function controllers(AttributeScanner $scanner): array
+ * {
+ *     return $scanner->discover(Route::class, ['src/']); // FQCNs, in either mode
+ * }
+ * ```
  */
 interface AttributeScanner extends Scanner
 {
@@ -35,7 +37,8 @@ interface AttributeScanner extends Scanner
      * More efficient than scan() + manual filtering: exits early
      * when attribute match is impossible (no #[...] tokens in file).
      *
-     * @param class-string $attributeClass Attribute to find
+     * @param string $attributeClass Attribute FQCN (`Route::class`); token mode resolves
+     *                               `use` imports, so both modes match the same name
      * @param array<string> $paths         Paths to scan
      *
      * @return DiscoveryResult Classes with the attribute
@@ -48,10 +51,20 @@ interface AttributeScanner extends Scanner
      * Returns classes that have ANY of the specified attributes.
      * Useful for discovering all annotated components in a single pass.
      *
-     * @param array<class-string> $attributeClasses Attributes to find
+     * @param array<string> $attributeClasses Attribute identifiers (OR semantics)
      * @param array<string> $paths                  Paths to scan
      *
      * @return DiscoveryResult Classes with any matching attribute
      */
     public function scanForAttributes(array $attributeClasses, array $paths): DiscoveryResult;
+
+    /**
+     * FQCNs of the classes carrying the attribute — the class-finder shape
+     * consumed through typed closures (`$scanner->discover(...)`).
+     *
+     * @param array<string> $paths Paths to scan
+     *
+     * @return list<string>
+     */
+    public function discover(string $attributeClass, array $paths): array;
 }

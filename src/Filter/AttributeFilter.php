@@ -12,10 +12,10 @@ use KaririCode\ClassDiscovery\Result\ClassMetadata;
  *
  * Checks class-level, method-level, and property-level attributes.
  *
- * @package KaririCode\ClassDiscovery\Filter
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.0.0
+ * ```php
+ * // accepted when the class, a method or a property carries either attribute
+ * $scanner->addFilter(new AttributeFilter(Route::class, Command::class));
+ * ```
  */
 final readonly class AttributeFilter implements ClassFilter
 {
@@ -27,36 +27,21 @@ final readonly class AttributeFilter implements ClassFilter
         $this->attributeClasses = $attributeClasses;
     }
 
-    #[\Override]
     public function accept(ClassMetadata $metadata): bool
     {
         foreach ($this->attributeClasses as $attrClass) {
-            // Token parser stores short names (e.g. 'SampleAttribute').
-            // Callers may pass FQCNs. Accept both short name and full match,
-            // but only compute shortName when $attrClass is actually a FQCN
-            // (contains '\') to avoid false-positives with built-in names.
-            $lastBackslash = strrpos($attrClass, '\\');
-            $shortName = $lastBackslash !== false
-                ? substr($attrClass, $lastBackslash + 1)
-                : null;
-
-            $matchClass = $metadata->hasAttribute($attrClass)
-                || ($shortName !== null && $metadata->hasAttribute($shortName));
-
-            if ($matchClass) {
+            if ($metadata->hasAttribute($attrClass)) {
                 return true;
             }
 
             foreach ($metadata->methods as $method) {
-                if ($method->hasAttribute($attrClass)
-                    || ($shortName !== null && $method->hasAttribute($shortName))) {
+                if ($method->hasAttribute($attrClass)) {
                     return true;
                 }
             }
 
             foreach ($metadata->properties as $property) {
-                if ($property->hasAttribute($attrClass)
-                    || ($shortName !== null && $property->hasAttribute($shortName))) {
+                if ($property->hasAttribute($attrClass)) {
                     return true;
                 }
             }

@@ -10,10 +10,9 @@ namespace KaririCode\ClassDiscovery\Contract;
  * Implementations typically parse composer.json autoload sections
  * to build the namespace-to-directory mapping.
  *
- * @package KaririCode\ClassDiscovery\Contract
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.0.0
+ * ```php
+ * $resolver->resolve('/app/src/Http/HomeController.php'); // 'App\Http\HomeController'
+ * ```
  */
 interface NamespaceResolver
 {

@@ -6,10 +6,8 @@ namespace KaririCode\ClassDiscovery\Tests\Unit\Filter;
 
 use KaririCode\ClassDiscovery\Filter\StructuralFilter;
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
-use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(StructuralFilter::class)]
 final class StructuralFilterTest extends TestCase
 {
     use MetadataFactory;

@@ -10,10 +10,10 @@ namespace KaririCode\ClassDiscovery\Contract;
  * Decouples scanning from caching strategy. Implementations range
  * from in-memory (dev) to file-based OPcache-friendly (production).
  *
- * @package KaririCode\ClassDiscovery\Contract
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.0.0
+ * ```php
+ * $cache->set($key, $result, ttl: 3600);
+ * $cache->get($key)?->getClasses();
+ * ```
  */
 interface CacheStrategy
 {

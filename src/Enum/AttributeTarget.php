@@ -12,10 +12,9 @@ use Attribute;
  * Backed enum: int values map to PHP's native Attribute::TARGET_* bitmask.
  * ARFA 1.3 E-003: backed enums permitted when external representation required.
  *
- * @package KaririCode\ClassDiscovery\Enum
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.0.0
+ * ```php
+ * AttributeTarget::from(\Attribute::TARGET_METHOD); // AttributeTarget::Method
+ * ```
  */
 enum AttributeTarget: int
 {

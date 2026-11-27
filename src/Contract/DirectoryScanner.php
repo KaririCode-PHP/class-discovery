@@ -10,10 +10,9 @@ namespace KaririCode\ClassDiscovery\Contract;
  * Provides depth-limited, symlink-safe traversal following PSR-4 conventions.
  * Path traversal prevention via realpath() validation.
  *
- * @package KaririCode\ClassDiscovery\Contract
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.0.0
+ * ```php
+ * $result = $scanner->setMaxDepth(3)->setPattern('*Controller.php')->scan(['src/']);
+ * ```
  */
 interface DirectoryScanner extends Scanner
 {

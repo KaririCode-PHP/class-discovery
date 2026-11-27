@@ -12,10 +12,14 @@ use KaririCode\ClassDiscovery\Result\ClassMetadata;
  * All operations return new instances (ARFA 1.3 P1: Immutable State Transformation).
  * Supports iteration, counting, and filtering without mutation.
  *
- * @package KaririCode\ClassDiscovery\Contract
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.1.0
+ *
+ * ```php
+ * foreach ($result as $fqcn => $metadata) {
+ *     // ...
+ * }
+ * $result->hasErrors(); // files that could not be read or reflected, keyed by path or FQCN
+ * ```
+ *
  * @extends \IteratorAggregate<string, ClassMetadata>
  */
 interface DiscoveryResult extends \Countable, \IteratorAggregate

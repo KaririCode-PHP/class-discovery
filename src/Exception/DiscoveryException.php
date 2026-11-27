@@ -4,109 +4,38 @@ declare(strict_types=1);
 
 namespace KaririCode\ClassDiscovery\Exception;
 
+use KaririCode\Contract\Exception\ExceptionInterface;
+
 /**
- * Domain exception hierarchy for class discovery operations.
+ * Root of every failure raised by class discovery.
  *
- * Named constructors encode error semantics; error codes are unique
- * across the component to enable programmatic handling.
+ * Each concrete exception implements exactly one family of
+ * kariricode/contract (`NotFound`, `Configuration`, `Runtime`), so an edge
+ * maps it to a status without knowing this package; the numeric code keeps
+ * failures countable without parsing messages (ARFA 1.3 P5).
  *
- * | Code | Meaning                    |
- * |------|----------------------------|
- * | 1001 | Path not found             |
- * | 1002 | Path traversal detected    |
- * | 1003 | Symlink escape detected    |
- * | 1004 | Max depth exceeded         |
- * | 1005 | Max files exceeded         |
- * | 1006 | Scan timeout               |
- * | 1007 | Token parse failure        |
- * | 1008 | Namespace resolution error |
- * | 1009 | Cache corruption           |
- * | 1010 | Circular dependency        |
+ * Codes — kariricode/class-discovery owns 8700–8799:
  *
- * @package KaririCode\ClassDiscovery\Exception
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.0.0
+ * | Code | Exception                         | Family        |
+ * |------|-----------------------------------|---------------|
+ * | 8701 | PathNotFoundException             | NotFound      |
+ * | 8702 | SymlinkEscapeException            | Runtime       |
+ * | 8710 | ScanLimitExceededException (depth)| Runtime       |
+ * | 8711 | ScanLimitExceededException (files)| Runtime       |
+ * | 8720 | CacheIntegrityException           | Runtime       |
+ * | 8721 | InsecureCacheDirectoryException   | Configuration |
+ * | 8722 | InsecureCacheDirectoryException   | Configuration |
+ * | 8730 | CircularDependencyException       | Runtime       |
+ * | 8740 | InvalidConfigurationException     | Configuration |
+ *
+ * ```php
+ * try {
+ *     $scanner->scan(['src/']);
+ * } catch (DiscoveryException $e) {
+ *     $e->getCode(); // 8701 when 'src/' does not exist
+ * }
+ * ```
+ *
+ * @see docs/spec/SPEC-001-component-specification.md §6
  */
-final class DiscoveryException extends \RuntimeException
-{
-    public static function pathNotFound(string $path): self
-    {
-        return new self(
-            "Discovery path does not exist: {$path}",
-            1001,
-        );
-    }
-
-    public static function pathTraversalDetected(string $path, string $resolved): self
-    {
-        return new self(
-            "Path traversal detected: '{$path}' resolves to '{$resolved}' outside allowed root",
-            1002,
-        );
-    }
-
-    public static function symlinkEscape(string $symlink, string $target, string $root): self
-    {
-        return new self(
-            "Symlink '{$symlink}' targets '{$target}' outside scan root '{$root}'",
-            1003,
-        );
-    }
-
-    public static function maxDepthExceeded(int $depth, int $limit): self
-    {
-        return new self(
-            "Directory depth {$depth} exceeds limit {$limit}",
-            1004,
-        );
-    }
-
-    public static function maxFilesExceeded(int $count, int $limit): self
-    {
-        return new self(
-            "File count {$count} exceeds limit {$limit}",
-            1005,
-        );
-    }
-
-    public static function scanTimeout(float $elapsed, float $limit): self
-    {
-        return new self(
-            \sprintf("Scan timed out after %.2fs (limit: %.2fs)", $elapsed, $limit),
-            1006,
-        );
-    }
-
-    public static function tokenParseFailure(string $file, string $reason): self
-    {
-        return new self(
-            "Failed to parse tokens in '{$file}': {$reason}",
-            1007,
-        );
-    }
-
-    public static function namespaceResolutionError(string $file, string $reason): self
-    {
-        return new self(
-            "Cannot resolve namespace for '{$file}': {$reason}",
-            1008,
-        );
-    }
-
-    public static function cacheCorruption(string $key, string $reason): self
-    {
-        return new self(
-            "Cache entry '{$key}' is corrupted: {$reason}",
-            1009,
-        );
-    }
-
-    public static function circularDependency(string $chain): self
-    {
-        return new self(
-            "Circular dependency detected: {$chain}",
-            1010,
-        );
-    }
-}
+abstract class DiscoveryException extends \RuntimeException implements ExceptionInterface {}

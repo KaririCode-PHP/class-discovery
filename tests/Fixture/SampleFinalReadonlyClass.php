@@ -9,6 +9,5 @@ final readonly class SampleFinalReadonlyClass
     public function __construct(
         public string $id,
         public string $label,
-    ) {
-    }
+    ) {}
 }

@@ -11,7 +11,5 @@ class AttributedClass
     public string $field = '';
 
     #[MethodAttribute]
-    public function execute(): void
-    {
-    }
+    public function execute(): void {}
 }

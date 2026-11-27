@@ -5,221 +5,284 @@ declare(strict_types=1);
 namespace KaririCode\ClassDiscovery\Tests\Unit\Cache;
 
 use KaririCode\ClassDiscovery\Cache\FileCacheStrategy;
+use KaririCode\ClassDiscovery\Enum\AttributeTarget;
 use KaririCode\ClassDiscovery\Exception\DiscoveryException;
+use KaririCode\ClassDiscovery\Exception\InsecureCacheDirectoryException;
 use KaririCode\ClassDiscovery\Result\DiscoveryResult;
+use KaririCode\ClassDiscovery\Tests\Double\SettableClock;
+use KaririCode\ClassDiscovery\Tests\Double\WakeupProbe;
+use KaririCode\ClassDiscovery\Tests\Fixture\SampleEnum;
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
-use PHPUnit\Framework\Attributes\CoversClass;
+use KaririCode\ClassDiscovery\Tests\TemporaryDirectories;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(FileCacheStrategy::class)]
 final class FileCacheStrategyTest extends TestCase
 {
     use MetadataFactory;
+    use TemporaryDirectories;
 
     private string $cacheDir;
     private FileCacheStrategy $cache;
 
     protected function setUp(): void
     {
-        $this->cacheDir = sys_get_temp_dir() . '/kc_test_cache_' . uniqid();
+        $this->cacheDir = $this->temporaryDirectory() . '/cache';
         $this->cache = new FileCacheStrategy($this->cacheDir);
     }
 
-    protected function tearDown(): void
-    {
-        $this->removeDir($this->cacheDir);
-    }
-
-    public function testGetReturnsNullForMissingKey(): void
+    public function testMissingKeyIsNull(): void
     {
         self::assertNull($this->cache->get('nonexistent'));
+        self::assertFalse($this->cache->has('nonexistent'));
     }
 
-    public function testSetAndGet(): void
+    public function testRoundTripPreservesTheResult(): void
     {
-        $result = new DiscoveryResult(
-            ['App\\A' => self::createClassMetadata(name: 'App\\A')],
-            [],
-            0.05,
-        );
-
-        $this->cache->set('scan', $result);
+        $this->cache->set('scan', new DiscoveryResult(['App\\A' => self::createClassMetadata(name: 'App\\A')], [], 0.05));
 
         $cached = $this->cache->get('scan');
         self::assertNotNull($cached);
-        self::assertCount(1, $cached);
         self::assertTrue($cached->hasClass('App\\A'));
         self::assertSame(0.05, $cached->getScanDuration());
+        self::assertTrue($this->cache->has('scan'));
     }
 
-    public function testHas(): void
-    {
-        self::assertFalse($this->cache->has('key'));
-
-        $this->cache->set('key', new DiscoveryResult());
-
-        self::assertTrue($this->cache->has('key'));
-    }
-
-    public function testDelete(): void
-    {
-        $this->cache->set('key', new DiscoveryResult());
-        $this->cache->delete('key');
-
-        self::assertFalse($this->cache->has('key'));
-    }
-
-    public function testClear(): void
+    public function testDeleteAndClear(): void
     {
         $this->cache->set('a', new DiscoveryResult());
         $this->cache->set('b', new DiscoveryResult());
-        $this->cache->clear();
 
+        $this->cache->delete('a');
         self::assertFalse($this->cache->has('a'));
+        self::assertTrue($this->cache->has('b'));
+
+        $this->cache->clear();
         self::assertFalse($this->cache->has('b'));
     }
 
-    public function testPersistenceAcrossInstances(): void
+    public function testPersistsAcrossInstances(): void
     {
-        $result = new DiscoveryResult(
-            ['App\\X' => self::createClassMetadata(name: 'App\\X')],
-        );
+        $this->cache->set('persist', new DiscoveryResult(['App\\X' => self::createClassMetadata(name: 'App\\X')]));
 
-        $this->cache->set('persist', $result);
-
-        // New instance, same directory
-        $cache2 = new FileCacheStrategy($this->cacheDir);
-        $cached = $cache2->get('persist');
-
-        self::assertNotNull($cached);
-        self::assertTrue($cached->hasClass('App\\X'));
+        self::assertTrue(new FileCacheStrategy($this->cacheDir)->get('persist')?->hasClass('App\\X'));
     }
 
-    public function testGetReturnsNullForExpiredEntry(): void
+    public function testCreatesAPrivateDirectory(): void
     {
-        $result = new DiscoveryResult();
-
-        // Set with TTL=1s and immediately expire it by manipulating the file
-        $this->cache->set('expire', $result, 1);
-
-        // Read the cache file, change expires to past time
-        $files = glob($this->cacheDir . '/discovery_*.cache');
-        self::assertNotEmpty($files);
-
-        $data = unserialize(file_get_contents($files[0]) ?: '');
-        $data['expires'] = time() - 10; // force expired
-        file_put_contents($files[0], serialize($data));
-
-        self::assertNull($this->cache->get('expire'));
+        self::assertSame(0o700, fileperms($this->cacheDir) & 0o777);
     }
 
-    public function testGetReturnsNullForCorruptFile(): void
+    public function testRefusesAWorldWritableDirectory(): void
     {
-        $this->cache->set('corrupt', new DiscoveryResult());
-
-        // Get cache file and write garbage
-        $files = glob($this->cacheDir . '/discovery_*.cache');
-        self::assertNotEmpty($files);
-        file_put_contents($files[0], 'not-serialized-garbage!!!');
-
-        self::assertNull($this->cache->get('corrupt'));
-    }
-
-    public function testGetThrowsOnInvalidResultType(): void
-    {
-        $this->cache->set('bad-type', new DiscoveryResult());
-
-        // Find the cache file and replace with incorrect type
-        $files = glob($this->cacheDir . '/discovery_*.cache');
-        self::assertNotEmpty($files);
-
-        $badData = serialize(['result' => new \stdClass(), 'expires' => 0]);
-        file_put_contents($files[0], $badData);
+        $dir = $this->temporaryDirectory();
+        chmod($dir, 0o777);
 
         $this->expectException(DiscoveryException::class);
-        $this->cache->get('bad-type');
-    }
-
-    public function testDeleteNonExistentKeyDoesNothing(): void
-    {
-        // Should not throw
-        $this->cache->delete('nonexistent-key-xyz');
-        self::assertTrue(true);
-    }
-
-    public function testSetWithZeroTtlStoresForever(): void
-    {
-        $result = new DiscoveryResult();
-        $this->cache->set('forever', $result, 0);
-
-        self::assertNotNull($this->cache->get('forever'));
-    }
-
-    public function testCreatesDirectoryOnConstruction(): void
-    {
-        $dir = sys_get_temp_dir() . '/kc_new_dir_' . uniqid();
-        self::assertDirectoryDoesNotExist($dir);
+        $this->expectExceptionCode(8721);
+        $this->expectExceptionMessage('world-writable');
 
         new FileCacheStrategy($dir);
-
-        self::assertDirectoryExists($dir);
-        $this->removeDir($dir);
     }
 
-    public function testConstructorThrowsWhenDirectoryCannotBeCreated(): void
+    public function testRefusesASymlinkedDirectory(): void
     {
-        // Create a file where the directory should be — mkdir will fail
-        $blockingFile = sys_get_temp_dir() . '/kc_block_' . uniqid();
-        file_put_contents($blockingFile, 'blocking');
-
-        // Trying to create a directory INSIDE the blocking file triggers mkdir failure
-        $impossibleDir = $blockingFile . '/subdir';
+        $link = $this->temporaryDirectory() . '/link';
+        symlink($this->temporaryDirectory(), $link);
 
         $this->expectException(DiscoveryException::class);
+        $this->expectExceptionCode(8721);
+        $this->expectExceptionMessage('symbolic link');
+
+        new FileCacheStrategy($link);
+    }
+
+    public function testObjectInjectionPayloadIsNeverInstantiated(): void
+    {
+        WakeupProbe::$woken = false;
+        $file = $this->storeThenTamper(serialize(['result' => new WakeupProbe(), 'expires' => 0]));
 
         try {
-            new FileCacheStrategy($impossibleDir);
-        } finally {
-            unlink($blockingFile);
+            $this->cache->get('k');
+            self::fail('A tampered entry must be refused');
+        } catch (DiscoveryException $e) {
+            self::assertSame(8720, $e->getCode());
         }
+
+        self::assertFalse(WakeupProbe::$woken, 'unserialize() must not wake non-allow-listed classes');
+        self::assertFileDoesNotExist($file);
     }
 
-    public function testClearReturnsSilentlyWhenDirectoryUnreadable(): void
+    public function testEntryWithAnUnrestorableArgumentObjectIsAMiss(): void
     {
-        // Populate some cache files first
-        $this->cache->set('x', new DiscoveryResult());
+        $this->cache->set('k', $this->resultWithArgument(new \ArrayObject([1, 2])));
 
-        // Make the cache directory unreadable so glob() returns false
-        chmod($this->cacheDir, 0o000);
-
-        if (is_readable($this->cacheDir)) {
-            chmod($this->cacheDir, 0o755);
-            $this->markTestSkipped('Cannot make directory unreadable (running as root).');
-        }
-
-        // clear() must not throw — just return early (L94)
-        $this->cache->clear();
-        $this->assertTrue(true); // reached here without exception
-
-        // Restore so tearDown can clean up
-        chmod($this->cacheDir, 0o755);
+        self::assertNull($this->cache->get('k'), 'A partially restored result must never be served');
+        self::assertSame([], glob($this->cacheDir . '/discovery_*.cache'));
     }
 
-    private function removeDir(string $dir): void
+    public function testEnumArgumentsSurviveTheRoundTrip(): void
     {
-        if (! is_dir($dir)) {
-            return;
-        }
+        $this->cache->set('k', $this->resultWithArgument(SampleEnum::Active));
 
-        $files = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST,
+        $cached = $this->cache->get('k');
+        self::assertNotNull($cached);
+        self::assertSame(SampleEnum::Active, $cached->getClass('App\\A')?->getAttribute('App\\Route')?->arguments['value']);
+    }
+
+    public function testKeysCannotAddressPathsOutsideTheDirectory(): void
+    {
+        $this->cache->set('../../escape', new DiscoveryResult());
+
+        self::assertCount(1, (array) glob($this->cacheDir . '/discovery_*.cache'));
+        self::assertFileDoesNotExist(dirname($this->cacheDir, 2) . '/escape');
+        self::assertTrue($this->cache->has('../../escape'));
+    }
+
+    public function testExpiredEntryIsPurged(): void
+    {
+        $file = $this->storeThenTamper(serialize(['result' => new DiscoveryResult(), 'expires' => time() - 60]));
+
+        self::assertNull($this->cache->get('k'));
+        self::assertFileDoesNotExist($file);
+    }
+
+    public function testMalformedEntryIsPurged(): void
+    {
+        $file = $this->storeThenTamper('not a serialized entry');
+
+        self::assertNull($this->cache->get('k'));
+        self::assertFileDoesNotExist($file);
+    }
+
+    public function testNonPositiveTtlNeverExpiresAndPositiveTtlIsHonoured(): void
+    {
+        $this->cache->set('forever', new DiscoveryResult(), 0);
+        $this->cache->set('negative', new DiscoveryResult(), -5);
+        $this->cache->set('hour', new DiscoveryResult(), 3600);
+
+        self::assertNotNull($this->cache->get('forever'));
+        self::assertNotNull($this->cache->get('negative'));
+        self::assertNotNull($this->cache->get('hour'));
+    }
+
+    public function testFutureAndZeroExpiryAreServed(): void
+    {
+        $this->storeThenTamper(serialize(['result' => new DiscoveryResult(), 'expires' => time() + 60]));
+        self::assertNotNull($this->cache->get('k'));
+
+        $this->storeThenTamper(serialize(['result' => new DiscoveryResult(), 'expires' => 0]));
+        self::assertNotNull($this->cache->get('k'));
+    }
+
+    public function testUnrestorableObjectsNestedInMemberAttributesAreDetected(): void
+    {
+        $nested = self::createAttributeMetadata(name: 'App\\Route', arguments: ['deep' => ['deeper' => [new \ArrayObject()]]]);
+
+        $this->cache->set('method', new DiscoveryResult(['App\\A' => self::createClassMetadata(
+            name: 'App\\A',
+            methods: ['run' => self::createMethodMetadata(name: 'run', attributes: ['App\\Route' => $nested])],
+        )]));
+        $this->cache->set('property', new DiscoveryResult(['App\\A' => self::createClassMetadata(
+            name: 'App\\A',
+            properties: ['id' => self::createPropertyMetadata(name: 'id', attributes: ['App\\Route' => $nested])],
+        )]));
+
+        self::assertNull($this->cache->get('method'));
+        self::assertNull($this->cache->get('property'));
+    }
+
+    public function testScalarArgumentsAreServedFromCache(): void
+    {
+        $this->cache->set('k', $this->resultWithArgument(['methods' => ['GET', 'POST'], 'priority' => 5]));
+
+        self::assertSame(
+            ['value' => ['methods' => ['GET', 'POST'], 'priority' => 5]],
+            $this->cache->get('k')?->getClass('App\\A')?->getAttribute('App\\Route')?->arguments,
         );
+    }
 
-        foreach ($files as $file) {
-            $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
-        }
+    public function testClearOnlyRemovesCacheEntries(): void
+    {
+        file_put_contents($this->cacheDir . '/keep.txt', 'not a cache entry');
+        $this->cache->set('a', new DiscoveryResult());
 
-        rmdir($dir);
+        $this->cache->clear();
+
+        self::assertFileExists($this->cacheDir . '/keep.txt');
+        self::assertFalse($this->cache->has('a'));
+    }
+
+    public function testDeletingAMissingKeyIsANoOp(): void
+    {
+        $this->cache->delete('never-stored');
+
+        self::assertFalse($this->cache->has('never-stored'));
+    }
+
+    public function testEntryWithAnUnrestorableAttributeInstanceIsAMiss(): void
+    {
+        // ReflectionScanner stores attribute instances; their classes are not on the allow-list.
+        $attribute = self::createAttributeMetadata(name: 'App\\Route', instance: new \ArrayObject(['path' => '/']));
+        $this->cache->set('k', new DiscoveryResult(['App\\A' => self::createClassMetadata(name: 'App\\A', attributes: ['App\\Route' => $attribute])]));
+
+        self::assertNull($this->cache->get('k'), 'an incomplete instance must never be served');
+        self::assertSame([], glob($this->cacheDir . '/discovery_*.cache'));
+    }
+
+    public function testUncreatableDirectoryFailsClosedWithoutAWarning(): void
+    {
+        $blocker = $this->temporaryDirectory() . '/blocker';
+        file_put_contents($blocker, 'a file where the directory should go');
+
+        $this->expectException(InsecureCacheDirectoryException::class);
+        $this->expectExceptionCode(8722);
+
+        new FileCacheStrategy($blocker . '/cache');
+    }
+
+    /**
+     * Writes a legitimate entry for key 'k', then replaces its bytes — simulating
+     * corruption or an attacker with write access to the cache directory.
+     */
+    private function storeThenTamper(string $payload): string
+    {
+        $this->cache->set('k', new DiscoveryResult());
+        $files = glob($this->cacheDir . '/discovery_*.cache');
+        self::assertIsArray($files);
+        self::assertCount(1, $files);
+        file_put_contents($files[0], $payload);
+
+        return $files[0];
+    }
+
+    private function resultWithArgument(mixed $argument): DiscoveryResult
+    {
+        $attribute = self::createAttributeMetadata(name: 'App\\Route', target: AttributeTarget::Class_, arguments: ['value' => $argument]);
+
+        return new DiscoveryResult(['App\\A' => self::createClassMetadata(name: 'App\\A', attributes: ['App\\Route' => $attribute])]);
+    }
+
+    public function testEntryIsServedUntilItsTtlElapsesThenPurged(): void
+    {
+        $clock = new SettableClock();
+        $cache = new FileCacheStrategy($this->temporaryDirectory() . '/clocked', $clock);
+        $cache->set('k', new DiscoveryResult(), 60);
+
+        $clock->advance(60);
+        self::assertNotNull($cache->get('k'), 'still valid at exactly the TTL');
+
+        $clock->advance(1);
+        self::assertNull($cache->get('k'));
+        self::assertFalse($cache->has('k'));
+    }
+
+    public function testZeroTtlNeverExpires(): void
+    {
+        $clock = new SettableClock();
+        $cache = new FileCacheStrategy($this->temporaryDirectory() . '/clocked', $clock);
+        $cache->set('k', new DiscoveryResult(), 0);
+
+        $clock->advance(10 * 365 * 24 * 3600);
+        self::assertNotNull($cache->get('k'));
     }
 }

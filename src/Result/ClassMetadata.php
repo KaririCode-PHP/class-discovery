@@ -11,10 +11,11 @@ namespace KaririCode\ClassDiscovery\Result;
  * no getters, no toArray(), no jsonSerialize(). PHP's native
  * json_encode() handles readonly public properties directly.
  *
- * @package KaririCode\ClassDiscovery\Result
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.1.0
+ * ```php
+ * if ($metadata->isFinal && $metadata->implementsInterface(\Countable::class)) {
+ *     // ...
+ * }
+ * ```
  */
 final readonly class ClassMetadata
 {
@@ -53,8 +54,7 @@ final readonly class ClassMetadata
         public array $attributes = [],
         public array $methods = [],
         public array $properties = [],
-    ) {
-    }
+    ) {}
 
     /**
      * Whether this class has a specific attribute.
@@ -77,7 +77,7 @@ final readonly class ClassMetadata
      */
     public function implementsInterface(string $interface): bool
     {
-        return \in_array($interface, $this->interfaces, true);
+        return in_array($interface, $this->interfaces, true);
     }
 
     /**

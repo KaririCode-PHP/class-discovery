@@ -6,10 +6,8 @@ namespace KaririCode\ClassDiscovery\Tests\Unit\Filter;
 
 use KaririCode\ClassDiscovery\Filter\InterfaceFilter;
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
-use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(InterfaceFilter::class)]
 final class InterfaceFilterTest extends TestCase
 {
     use MetadataFactory;

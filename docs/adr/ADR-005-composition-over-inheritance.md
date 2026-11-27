@@ -36,6 +36,11 @@ FileScanner (final class, all private)
   └── ReflectionScanner (composes)
 ```
 
+## Alternatives Considered
+
+- **`AttributeScanner extends FileScanner`** (the 1.x design). Rejected: fragile base class; it produced the double-read defect BUG-006.
+- **Shared traits.** Rejected: hidden coupling to private state, untestable in isolation.
+
 ## Consequences
 
 **Positive:**

@@ -18,6 +18,11 @@ All Result objects (`ClassMetadata`, `MethodMetadata`, `PropertyMetadata`, `Attr
 
 Public properties are the API — no getters, no `toArray()`, no `jsonSerialize()` (ARFA 1.3 E-001). PHP's native `json_encode()` handles readonly public properties directly.
 
+## Alternatives Considered
+
+- **Mutable result collections with setters.** Rejected: a result shared through the cache could be corrupted by any consumer (ARFA 1.3 P1).
+- **Plain arrays.** Rejected: no type safety, and arrays as domain types are a Spec §18 antipattern.
+
 ## Consequences
 
 **Positive:**

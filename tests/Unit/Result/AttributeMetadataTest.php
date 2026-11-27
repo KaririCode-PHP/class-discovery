@@ -7,10 +7,8 @@ namespace KaririCode\ClassDiscovery\Tests\Unit\Result;
 use KaririCode\ClassDiscovery\Enum\AttributeTarget;
 use KaririCode\ClassDiscovery\Result\AttributeMetadata;
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
-use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(AttributeMetadata::class)]
 final class AttributeMetadataTest extends TestCase
 {
     use MetadataFactory;
@@ -65,6 +63,7 @@ final class AttributeMetadataTest extends TestCase
 
         $json = json_encode($attr, JSON_THROW_ON_ERROR);
         $decoded = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($decoded);
 
         self::assertSame('App\\Route', $decoded['name']);
         self::assertSame(['path' => '/api'], $decoded['arguments']);

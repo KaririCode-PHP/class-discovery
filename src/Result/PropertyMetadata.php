@@ -4,19 +4,20 @@ declare(strict_types=1);
 
 namespace KaririCode\ClassDiscovery\Result;
 
+use KaririCode\ClassDiscovery\Enum\Visibility;
+
 /**
  * Immutable metadata snapshot of a discovered property.
  *
- * @package KaririCode\ClassDiscovery\Result
- * @author  Walmir Silva <walmir.silva@kariricode.org>
- * @license MIT
- * @since   3.1.0
+ * ```php
+ * $metadata->properties['id']->visibility === Visibility::Private;
+ * ```
  */
 final readonly class PropertyMetadata
 {
     /**
      * @param string                           $name        Property name
-     * @param string                           $visibility  'public'|'protected'|'private'
+     * @param Visibility                           $visibility
      * @param string|null                      $type        Type declaration
      * @param bool                             $isReadonly  Whether property is readonly
      * @param bool                             $isStatic    Whether property is static
@@ -26,15 +27,14 @@ final readonly class PropertyMetadata
      */
     public function __construct(
         public string $name,
-        public string $visibility = 'public',
+        public Visibility $visibility = Visibility::Public,
         public ?string $type = null,
         public bool $isReadonly = false,
         public bool $isStatic = false,
         public bool $hasDefault = false,
         public bool $isPromoted = false,
         public array $attributes = [],
-    ) {
-    }
+    ) {}
 
     public function hasAttribute(string $attributeClass): bool
     {

@@ -4,112 +4,110 @@ declare(strict_types=1);
 
 namespace KaririCode\ClassDiscovery\Tests\Integration;
 
-use KaririCode\ClassDiscovery\Contract\NamespaceResolver;
+use KaririCode\ClassDiscovery\Cache\MemoryCacheStrategy;
+use KaririCode\ClassDiscovery\Filter\StructuralFilter;
 use KaririCode\ClassDiscovery\Scanner\AttributeScanner;
-use PHPUnit\Framework\Attributes\CoversClass;
+use KaririCode\ClassDiscovery\Tests\Fixture\SampleAttribute;
+use KaririCode\ClassDiscovery\Tests\FixturePaths;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(AttributeScanner::class)]
+/**
+ * Token mode resolves `use` imports: the fixtures write `#[SampleAttribute]`,
+ * which is recorded — and matched — as its FQCN, like in reflection mode.
+ */
 final class AttributeScannerIntegrationTest extends TestCase
 {
-    private string $fixtureDir;
-    private NamespaceResolver $resolver;
+    use FixturePaths;
+
+    private AttributeScanner $scanner;
 
     protected function setUp(): void
     {
-        $this->fixtureDir = realpath(__DIR__ . '/../Fixture');
-
-        $this->resolver = new class ($this->fixtureDir) implements NamespaceResolver {
-            public function __construct(private readonly string $baseDir)
-            {
-            }
-
-            public function resolve(string $filePath): ?string
-            {
-                $realPath = realpath($filePath);
-                if ($realPath === false || ! str_starts_with($realPath, $this->baseDir)) {
-                    return null;
-                }
-
-                $relative = substr($realPath, \strlen($this->baseDir) + 1);
-                $relative = str_replace('.php', '', $relative);
-                $className = str_replace('/', '\\', $relative);
-
-                return 'KaririCode\\ClassDiscovery\\Tests\\Fixture\\' . $className;
-            }
-
-            public function addMapping(string $prefix, string $directory): self
-            {
-                return $this;
-            }
-        };
+        $this->scanner = new AttributeScanner();
     }
 
-    public function testScanReturnsResults(): void
+    public function testPlainScanDiscoversEveryFixture(): void
     {
-        $scanner = new AttributeScanner($this->resolver);
-        $result = $scanner->scan([$this->fixtureDir]);
-
-        self::assertGreaterThan(0, $result->count());
+        self::assertCount(12, $this->scanner->scan([self::fixturePath()]));
     }
 
-    public function testScanForAttributeFindsAnnotatedClass(): void
+    public function testScanForAttributeFindsOnlyAnnotatedClasses(): void
     {
-        $scanner = new AttributeScanner($this->resolver);
-        $result = $scanner->scanForAttribute(
-            'SampleAttribute',  // token parser stores short names
-            [$this->fixtureDir],
+        $result = $this->scanner->scanForAttribute(self::fixtureClass('SampleAttribute'), [self::fixturePath()]);
+
+        self::assertSame([self::fixtureClass('AttributedClass')], array_keys($result->getClasses()));
+    }
+
+    public function testScanForAttributesUsesOrSemantics(): void
+    {
+        $result = $this->scanner->scanForAttributes([self::fixtureClass('SampleAttribute'), 'Attribute'], [self::fixturePath()]);
+
+        // AttributedClass carries SampleAttribute; the three attribute classes carry #[Attribute].
+        self::assertCount(4, $result);
+    }
+
+    public function testUnknownAttributeFindsNothing(): void
+    {
+        self::assertCount(0, $this->scanner->scanForAttribute('TotallyAbsentAttribute', [self::fixturePath()]));
+    }
+
+    public function testAttributeOfOneCallNeverNarrowsTheNext(): void
+    {
+        // Regression (SRC-002): filters used to accumulate, so the second call required BOTH attributes.
+        $this->scanner->scanForAttribute('TotallyAbsentAttribute', [self::fixturePath()]);
+
+        self::assertCount(1, $this->scanner->scanForAttribute(self::fixtureClass('SampleAttribute'), [self::fixturePath()]));
+    }
+
+    public function testPersistentFiltersCombineWithTheCallFilter(): void
+    {
+        $this->scanner->addFilter(new StructuralFilter(isFinal: true));
+
+        // Every #[Attribute] class is final; AttributedClass (SampleAttribute) is not.
+        self::assertCount(3, $this->scanner->scanForAttributes([self::fixtureClass('SampleAttribute'), 'Attribute'], [self::fixturePath()]));
+    }
+
+    public function testDifferentAttributesNeverShareACacheEntry(): void
+    {
+        // Regression: the cache key used only filter class names, so AttributeFilter('A')
+        // and AttributeFilter('B') collided in a shared cache.
+        $this->scanner->setCacheStrategy(new MemoryCacheStrategy());
+
+        self::assertCount(1, $this->scanner->scanForAttribute(self::fixtureClass('SampleAttribute'), [self::fixturePath()]));
+        self::assertCount(3, $this->scanner->scanForAttribute('Attribute', [self::fixturePath()]));
+    }
+
+    public function testClearCacheWithoutACacheIsANoOp(): void
+    {
+        $this->scanner->clearCache();
+
+        self::assertCount(12, $this->scanner->scan([self::fixturePath()]));
+    }
+
+    public function testDiscoverReturnsTheFqcnsOfAnnotatedClasses(): void
+    {
+        self::assertSame(
+            [self::fixtureClass('AttributedClass')],
+            $this->scanner->discover(self::fixtureClass('SampleAttribute'), [self::fixturePath()]),
         );
-
-        // AttributedClass has #[SampleAttribute]
-        $found = false;
-        foreach ($result as $fqcn => $meta) {
-            if (str_contains($fqcn, 'AttributedClass')) {
-                $found = true;
-
-                break;
-            }
-        }
-
-        self::assertTrue($found, 'AttributedClass should be found by SampleAttribute filter');
     }
 
-    public function testScanForAttributesOrLogic(): void
+    public function testDiscoverServesAsTheTypedClosureObservabilityConsumes(): void
     {
-        $scanner = new AttributeScanner($this->resolver);
-        $result = $scanner->scanForAttributes(
-            [
-                'SampleAttribute',          // token parser short name
-                'NonExistentAttribute',     // does not exist
-            ],
-            [$this->fixtureDir],
-        );
+        // KC Observability: 'discovery' => $scanner->discover(...), called with Traced::class-style FQCNs
+        $finder = $this->scanner->discover(...);
 
-        // Should find at least AttributedClass (has SampleAttribute)
-        self::assertGreaterThan(0, $result->count());
+        self::assertSame([self::fixtureClass('AttributedClass')], $finder(SampleAttribute::class, [self::fixturePath()]));
     }
 
-    public function testScanForNonexistentAttributeReturnsEmpty(): void
+    public function testClearCacheEmptiesTheConfiguredCache(): void
     {
-        $scanner = new AttributeScanner($this->resolver);
-        $result = $scanner->scanForAttribute(
-            'TrulyNonExistentAttributeXyz',  // cannot match any short name in fixtures
-            [$this->fixtureDir],
-        );
+        $this->scanner->setCacheStrategy(new MemoryCacheStrategy());
+        $first = $this->scanner->scan([self::fixturePath()]);
+        self::assertSame($first, $this->scanner->scan([self::fixturePath()]), 'served from the cache');
 
-        self::assertCount(0, $result);
-    }
+        $this->scanner->clearCache();
 
-    public function testCompositionDoesNotDoubleRead(): void
-    {
-        // Verify the composition pattern works (BUG-006 fix)
-        $scanner = new AttributeScanner($this->resolver);
-
-        $result1 = $scanner->scan([$this->fixtureDir]);
-        // Scan again — should work without issues
-        $scanner2 = new AttributeScanner($this->resolver);
-        $result2 = $scanner2->scan([$this->fixtureDir]);
-
-        self::assertSame($result1->count(), $result2->count());
+        self::assertNotSame($first, $this->scanner->scan([self::fixturePath()]));
     }
 }

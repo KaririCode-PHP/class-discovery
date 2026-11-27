@@ -5,13 +5,25 @@ declare(strict_types=1);
 namespace KaririCode\ClassDiscovery\Tests;
 
 use KaririCode\ClassDiscovery\Enum\AttributeTarget;
-use KaririCode\ClassDiscovery\Result\{AttributeMetadata, ClassMetadata, MethodMetadata, PropertyMetadata};
+use KaririCode\ClassDiscovery\Enum\Visibility;
+use KaririCode\ClassDiscovery\Result\AttributeMetadata;
+use KaririCode\ClassDiscovery\Result\ClassMetadata;
+use KaririCode\ClassDiscovery\Result\MethodMetadata;
+use KaririCode\ClassDiscovery\Result\PropertyMetadata;
 
 /**
- * Factory methods for creating test metadata instances.
+ * Factory methods for test metadata with safe defaults: each test states only
+ * the fields it is about.
  */
 trait MetadataFactory
 {
+    /**
+     * @param list<string>                     $interfaces
+     * @param list<string>                     $traits
+     * @param array<string, AttributeMetadata> $attributes
+     * @param array<string, MethodMetadata>    $methods
+     * @param array<string, PropertyMetadata>  $properties
+     */
     private static function createClassMetadata(
         string $name = 'App\\Controller\\HomeController',
         string $filePath = '/src/Controller/HomeController.php',
@@ -50,12 +62,16 @@ trait MetadataFactory
         );
     }
 
+    /**
+     * @param array<array-key, mixed> $arguments
+     */
     private static function createAttributeMetadata(
         string $name = 'App\\Attribute\\Route',
         AttributeTarget $target = AttributeTarget::Class_,
         array $arguments = [],
         bool $isRepeated = false,
         ?string $targetName = null,
+        ?object $instance = null,
     ): AttributeMetadata {
         return new AttributeMetadata(
             name: $name,
@@ -63,12 +79,17 @@ trait MetadataFactory
             arguments: $arguments,
             isRepeated: $isRepeated,
             targetName: $targetName,
+            instance: $instance,
         );
     }
 
+    /**
+     * @param array<string, AttributeMetadata> $attributes
+     * @param array<string, string>            $parameters Parameter name => declared type
+     */
     private static function createMethodMetadata(
         string $name = 'execute',
-        string $visibility = 'public',
+        Visibility $visibility = Visibility::Public,
         bool $isStatic = false,
         bool $isAbstract = false,
         ?string $returnType = null,
@@ -86,9 +107,12 @@ trait MetadataFactory
         );
     }
 
+    /**
+     * @param array<string, AttributeMetadata> $attributes
+     */
     private static function createPropertyMetadata(
         string $name = 'id',
-        string $visibility = 'public',
+        Visibility $visibility = Visibility::Public,
         ?string $type = null,
         bool $isReadonly = false,
         bool $isStatic = false,

@@ -6,10 +6,8 @@ namespace KaririCode\ClassDiscovery\Tests\Unit\Result;
 
 use KaririCode\ClassDiscovery\Result\ClassMetadata;
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
-use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(ClassMetadata::class)]
 final class ClassMetadataTest extends TestCase
 {
     use MetadataFactory;
@@ -118,6 +116,7 @@ final class ClassMetadataTest extends TestCase
 
         $json = json_encode($meta, JSON_THROW_ON_ERROR);
         $decoded = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($decoded);
 
         self::assertSame('App\\Controller\\HomeController', $decoded['name']);
         self::assertTrue($decoded['isFinal']);

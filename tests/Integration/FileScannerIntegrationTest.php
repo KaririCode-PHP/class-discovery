@@ -5,220 +5,350 @@ declare(strict_types=1);
 namespace KaririCode\ClassDiscovery\Tests\Integration;
 
 use KaririCode\ClassDiscovery\Cache\MemoryCacheStrategy;
-use KaririCode\ClassDiscovery\Contract\NamespaceResolver;
 use KaririCode\ClassDiscovery\Exception\DiscoveryException;
-use KaririCode\ClassDiscovery\Filter\{StructuralFilter};
+use KaririCode\ClassDiscovery\Filter\StructuralFilter;
+use KaririCode\ClassDiscovery\Result\ClassMetadata;
+use KaririCode\ClassDiscovery\Scanner\ComposerNamespaceResolver;
 use KaririCode\ClassDiscovery\Scanner\FileScanner;
-use PHPUnit\Framework\Attributes\CoversClass;
+use KaririCode\ClassDiscovery\Tests\FixturePaths;
+use KaririCode\ClassDiscovery\Tests\TemporaryDirectories;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(FileScanner::class)]
+/**
+ * FileScanner reads the namespace from each file's own declaration; the
+ * ComposerNamespaceResolver is passed for API parity only (SRC-001).
+ */
 final class FileScannerIntegrationTest extends TestCase
 {
-    private string $fixtureDir;
-    private NamespaceResolver $resolver;
+    use FixturePaths;
+    use TemporaryDirectories;
+
+    private FileScanner $scanner;
 
     protected function setUp(): void
     {
-        $this->fixtureDir = realpath(__DIR__ . '/../Fixture');
-
-        // Manual resolver that maps fixture directory to test namespace
-        $this->resolver = new class ($this->fixtureDir) implements NamespaceResolver {
-            public function __construct(private readonly string $baseDir)
-            {
-            }
-
-            public function resolve(string $filePath): ?string
-            {
-                $realPath = realpath($filePath);
-                if ($realPath === false || ! str_starts_with($realPath, $this->baseDir)) {
-                    return null;
-                }
-
-                $relative = substr($realPath, \strlen($this->baseDir) + 1);
-                $relative = str_replace('.php', '', $relative);
-                $className = str_replace('/', '\\', $relative);
-
-                return 'KaririCode\\ClassDiscovery\\Tests\\Fixture\\' . $className;
-            }
-
-            public function addMapping(string $prefix, string $directory): self
-            {
-                return $this;
-            }
-        };
+        $this->scanner = new FileScanner();
     }
 
-    public function testScanFindsAllFixtureClasses(): void
+    public function testDiscoversEveryFixtureAndSkipsFilesWithoutTypes(): void
     {
-        $scanner = new FileScanner($this->resolver);
-        $result = $scanner->scan([$this->fixtureDir]);
+        $result = $this->scanner->scan([self::fixturePath()]);
 
-        // Should find: SampleInterface, SampleTrait, SampleEnum, SampleAbstractClass,
-        // SampleClass, SampleFinalReadonlyClass, ChildClass, AttributedClass,
-        // SampleAttribute, MethodAttribute, PropertyAttribute, DeepClass
-        // Should NOT find: helper_functions.php (no class)
-        self::assertGreaterThanOrEqual(8, $result->count());
+        self::assertCount(12, $result); // 13 fixture files; helper_functions.php declares no type
+        self::assertFalse($result->hasErrors());
         self::assertGreaterThan(0.0, $result->getScanDuration());
+        self::assertCount(0, $this->scanner->scan([self::fixturePath('helper_functions.php')]));
     }
 
-    public function testScanDetectsInterface(): void
+    public function testDetectsEachKindOfDeclaration(): void
     {
-        $scanner = new FileScanner($this->resolver);
-        $result = $scanner->scan([$this->fixtureDir . '/SampleInterface.php']);
+        self::assertTrue($this->fixture('SampleInterface')->isInterface);
+        self::assertTrue($this->fixture('SampleEnum')->isEnum);
+        self::assertTrue($this->fixture('SampleTrait')->isTrait);
+        self::assertTrue($this->fixture('SampleAbstractClass')->isAbstract);
 
-        $fqcn = 'KaririCode\\ClassDiscovery\\Tests\\Fixture\\SampleInterface';
-
-        self::assertTrue($result->hasClass($fqcn));
-        $meta = $result->getClass($fqcn);
-        self::assertTrue($meta->isInterface);
+        $finalReadonly = $this->fixture('SampleFinalReadonlyClass');
+        self::assertTrue($finalReadonly->isFinal);
+        self::assertTrue($finalReadonly->isReadonly);
     }
 
-    public function testScanDetectsEnum(): void
+    public function testImplementsIsKeptWhenExtendsPrecedesIt(): void
     {
-        $scanner = new FileScanner($this->resolver);
-        $result = $scanner->scan([$this->fixtureDir . '/SampleEnum.php']);
+        $meta = $this->fixture('SampleClass');
 
-        $fqcn = 'KaririCode\\ClassDiscovery\\Tests\\Fixture\\SampleEnum';
-
-        self::assertTrue($result->hasClass($fqcn));
-        $meta = $result->getClass($fqcn);
-        self::assertTrue($meta->isEnum);
+        self::assertSame(self::fixtureClass('SampleAbstractClass'), $meta->parent);
+        self::assertSame([self::fixtureClass('SampleInterface')], $meta->interfaces);
     }
 
-    public function testScanDetectsTrait(): void
+    public function testMemberModifiersDoNotLeakIntoClassMetadata(): void
     {
-        $scanner = new FileScanner($this->resolver);
-        $result = $scanner->scan([$this->fixtureDir . '/SampleTrait.php']);
+        // ChildClass promotes `private readonly float $extra`; the class itself is not readonly.
+        $meta = $this->fixture('ChildClass');
 
-        $fqcn = 'KaririCode\\ClassDiscovery\\Tests\\Fixture\\SampleTrait';
-
-        self::assertTrue($result->hasClass($fqcn));
-        $meta = $result->getClass($fqcn);
-        self::assertTrue($meta->isTrait);
-    }
-
-    public function testScanDetectsAbstractClass(): void
-    {
-        $scanner = new FileScanner($this->resolver);
-        $result = $scanner->scan([$this->fixtureDir . '/SampleAbstractClass.php']);
-
-        $fqcn = 'KaririCode\\ClassDiscovery\\Tests\\Fixture\\SampleAbstractClass';
-
-        self::assertTrue($result->hasClass($fqcn));
-        self::assertTrue($result->getClass($fqcn)->isAbstract);
-    }
-
-    public function testScanDetectsFinalReadonly(): void
-    {
-        $scanner = new FileScanner($this->resolver);
-        $result = $scanner->scan([$this->fixtureDir . '/SampleFinalReadonlyClass.php']);
-
-        $fqcn = 'KaririCode\\ClassDiscovery\\Tests\\Fixture\\SampleFinalReadonlyClass';
-
-        self::assertTrue($result->hasClass($fqcn));
-        $meta = $result->getClass($fqcn);
         self::assertTrue($meta->isFinal);
-        self::assertTrue($meta->isReadonly);
+        self::assertFalse($meta->isReadonly);
+        self::assertSame(self::fixtureClass('SampleClass'), $meta->parent);
     }
 
-    public function testScanDetectsInheritanceAndInterfaces(): void
+    public function testMemberAttributesDoNotLeakIntoClassAttributes(): void
     {
-        $scanner = new FileScanner($this->resolver);
-        $result = $scanner->scan([$this->fixtureDir . '/SampleClass.php']);
+        $meta = $this->scanSource('Leak', <<<'PHP'
+            namespace T;
+            #[ClassLevel]
+            final class Leak extends Base implements Contract
+            {
+                #[PropertyLevel] public int $count = 0;
+                #[MethodLevel] public function run(): void {}
+            }
+            PHP);
 
-        $fqcn = 'KaririCode\\ClassDiscovery\\Tests\\Fixture\\SampleClass';
-
-        self::assertTrue($result->hasClass($fqcn));
-        $meta = $result->getClass($fqcn);
-        self::assertSame('SampleAbstractClass', $meta->parent);
-        self::assertContains('SampleInterface', $meta->interfaces);
+        self::assertSame(['T\\ClassLevel'], array_keys($meta->attributes));
+        self::assertSame(['T\\Contract'], $meta->interfaces);
     }
 
-    public function testScanSkipsFilesWithoutClasses(): void
+    public function testGroupedAttributesAreAllCaptured(): void
     {
-        $scanner = new FileScanner($this->resolver);
-        $result = $scanner->scan([$this->fixtureDir . '/helper_functions.php']);
+        $meta = $this->scanSource('Grouped', <<<'PHP'
+            namespace T;
+            #[First, Second(methods: ['GET', 'POST'], options: ['a' => [1, 2]]), \Fq\Third]
+            final class Grouped {}
+            PHP);
 
-        self::assertCount(0, $result);
+        self::assertSame(['T\\First', 'T\\Second', 'Fq\\Third'], array_keys($meta->attributes));
     }
 
-    public function testScanWithFilter(): void
+    public function testRepeatedAttributeIsFlagged(): void
     {
-        $scanner = new FileScanner($this->resolver);
-        $scanner->addFilter(new StructuralFilter(isFinal: true));
+        $meta = $this->scanSource('Tagged', "namespace T;\n#[Tag('a')]\n#[Tag('b')]\n#[Once]\nclass Tagged {}");
 
-        $result = $scanner->scan([$this->fixtureDir]);
+        self::assertTrue($meta->attributes['T\\Tag']->isRepeated);
+        self::assertFalse($meta->attributes['T\\Once']->isRepeated);
+    }
 
-        // Only final classes should pass
+    public function testClassConstantFetchBeforeTheDeclarationIsNotADeclaration(): void
+    {
+        $meta = $this->scanSource('Real', "namespace T;\nconst ALIAS = Other::class;\nfinal class Real {}");
+
+        self::assertSame('T\\Real', $meta->name);
+        self::assertTrue($meta->isFinal);
+    }
+
+    public function testAnonymousClassesAreNotDeclarations(): void
+    {
+        $meta = $this->scanSource('Named', "namespace T;\n\$a = new class {};\n\$b = new readonly class {};\nclass Named {}");
+
+        self::assertSame('T\\Named', $meta->name);
+        self::assertFalse($meta->isReadonly);
+    }
+
+    public function testAttributesOfEarlierCodeDoNotAttachToTheClass(): void
+    {
+        $meta = $this->scanSource('After', "namespace T;\n#[Pure]\nfunction helper(): int { return 1; }\nfinal class After {}");
+
+        self::assertSame([], $meta->attributes);
+        self::assertTrue($meta->isFinal);
+    }
+
+    public function testInterfaceExtendsListsParentInterfaces(): void
+    {
+        $meta = $this->scanSource('Child', "namespace T;\ninterface Child extends First, \\Second {}");
+
+        self::assertNull($meta->parent);
+        self::assertSame(['T\\First', 'Second'], $meta->interfaces);
+    }
+
+    public function testEnumBackingTypeIsNotMistakenForAnInterface(): void
+    {
+        $meta = $this->scanSource('Status', "namespace T;\nenum Status: string implements HasLabel { case On = 'on'; }");
+
+        self::assertTrue($meta->isEnum);
+        self::assertSame(['T\\HasLabel'], $meta->interfaces);
+    }
+
+    public function testFiltersNarrowTheResult(): void
+    {
+        $result = $this->scanner->addFilter(new StructuralFilter(isFinal: true))->scan([self::fixturePath()]);
+
+        self::assertGreaterThan(0, $result->count());
         foreach ($result as $meta) {
             self::assertTrue($meta->isFinal, "{$meta->name} should be final");
         }
     }
 
-    public function testScanWithCache(): void
+    public function testCacheHitReturnsTheSameInstance(): void
     {
-        $cache = new MemoryCacheStrategy();
-        $scanner = new FileScanner($this->resolver);
-        $scanner->setCacheStrategy($cache);
+        $this->scanner->setCacheStrategy(new MemoryCacheStrategy());
 
-        $result1 = $scanner->scan([$this->fixtureDir]);
-        $result2 = $scanner->scan([$this->fixtureDir]);
-
-        // Second scan should be cached (same count, ~0 duration)
-        self::assertSame($result1->count(), $result2->count());
+        self::assertSame($this->scanner->scan([self::fixturePath()]), $this->scanner->scan([self::fixturePath()]));
     }
 
-    public function testScanThrowsForNonexistentPath(): void
+    public function testClearCacheForcesAFreshScan(): void
     {
-        $scanner = new FileScanner($this->resolver);
+        $this->scanner->setCacheStrategy(new MemoryCacheStrategy());
+        $first = $this->scanner->scan([self::fixturePath()]);
+        $this->scanner->clearCache();
 
-        $this->expectException(DiscoveryException::class);
-        $this->expectExceptionCode(1001);
-
-        $scanner->scan(['/nonexistent/path']);
+        self::assertNotSame($first, $this->scanner->scan([self::fixturePath()]));
     }
 
-    public function testScanNestedDirectory(): void
+    public function testNestedDirectoriesAreScanned(): void
     {
-        $scanner = new FileScanner($this->resolver);
-        $result = $scanner->scan([$this->fixtureDir . '/Nested']);
+        $meta = $this->scanner->scan([self::fixturePath('Nested')])->getClass(self::fixtureClass('Nested\\DeepClass'));
 
-        $fqcn = 'KaririCode\\ClassDiscovery\\Tests\\Fixture\\Nested\\DeepClass';
-
-        self::assertTrue($result->hasClass($fqcn));
-        $meta = $result->getClass($fqcn);
-        self::assertTrue($meta->isFinal);
+        self::assertNotNull($meta);
         self::assertSame('DeepClass', $meta->shortName);
     }
 
-    public function testScanSingleFile(): void
+    public function testMissingPathThrows(): void
     {
-        $scanner = new FileScanner($this->resolver);
-        $result = $scanner->scan([$this->fixtureDir . '/SampleEnum.php']);
+        $this->expectException(DiscoveryException::class);
+        $this->expectExceptionCode(8701);
 
-        self::assertGreaterThanOrEqual(1, $result->count());
+        $this->scanner->scan(['/nonexistent/path']);
     }
 
-    public function testScanDurationIsPositive(): void
+    public function testMaxFilesIsEnforced(): void
     {
-        $scanner = new FileScanner($this->resolver);
-        $result = $scanner->scan([$this->fixtureDir]);
+        $scanner = new FileScanner(maxFiles: 2);
 
-        self::assertGreaterThan(0.0, $result->getScanDuration());
+        $this->expectException(DiscoveryException::class);
+        $this->expectExceptionCode(8711);
+
+        $scanner->scan([self::fixturePath()]);
     }
 
-    public function testClearCache(): void
+    public function testFilesAboveTheSizeLimitAreSkipped(): void
     {
-        $cache = new MemoryCacheStrategy();
-        $scanner = new FileScanner($this->resolver);
-        $scanner->setCacheStrategy($cache);
+        $scanner = new FileScanner(maxFileSize: 10);
 
-        $scanner->scan([$this->fixtureDir]);
-        $scanner->clearCache();
+        self::assertCount(0, $scanner->scan([self::fixturePath('SampleEnum.php')]));
+    }
 
-        // After clear, scanning again should produce a fresh result
-        $result = $scanner->scan([$this->fixtureDir]);
-        self::assertGreaterThan(0, $result->count());
+    public function testMaxFilesBoundaryIsInclusive(): void
+    {
+        // GLOB_BRACE is not portable (absent on musl), so count both levels explicitly.
+        $files = count(glob(self::fixturePath() . '/*.php') ?: []) + count(glob(self::fixturePath() . '/*/*.php') ?: []);
+
+        self::assertCount(12, new FileScanner(maxFiles: $files)->scan([self::fixturePath()]));
+
+        $this->expectExceptionCode(8711);
+        new FileScanner(maxFiles: $files - 1)->scan([self::fixturePath()]);
+    }
+
+    public function testMaxFileSizeBoundaryIsInclusive(): void
+    {
+        $file = self::fixturePath('SampleEnum.php');
+        $size = (int) filesize($file);
+
+        self::assertCount(1, new FileScanner(maxFileSize: $size)->scan([$file]));
+        self::assertCount(0, new FileScanner(maxFileSize: $size - 1)->scan([$file]));
+    }
+
+    public function testScanDurationIsMeasuredInSeconds(): void
+    {
+        $duration = $this->scanner->scan([self::fixturePath()])->getScanDuration();
+
+        self::assertGreaterThan(0.0, $duration);
+        self::assertLessThan(60.0, $duration);
+    }
+
+    public function testClearCacheWithoutACacheIsANoOp(): void
+    {
+        $this->scanner->clearCache();
+
+        self::assertCount(12, $this->scanner->scan([self::fixturePath()]));
+    }
+
+    public function testCommentsBetweenKeywordsAndNamesAreTolerated(): void
+    {
+        $meta = $this->scanSource('Tight', "namespace /* ns */T;\nfinal class /* doc */Tight extends /* base */ Base {}");
+
+        self::assertSame('T\\Tight', $meta->name);
+        self::assertSame('T\\Base', $meta->parent);
+    }
+
+    public function testBracedGlobalNamespaceYieldsAnUnqualifiedName(): void
+    {
+        $meta = $this->scanSource('Glob', "namespace {\n    final class Glob {}\n}");
+
+        self::assertSame('Glob', $meta->name);
+        self::assertSame('', $meta->namespace);
+    }
+
+    public function testAdjacentAttributeGroupsAreBothCaptured(): void
+    {
+        $meta = $this->scanSource('Adjacent', "namespace T;\n#[First]#[Second]\nfinal class Adjacent {}");
+
+        self::assertSame(['T\\First', 'T\\Second'], array_keys($meta->attributes));
+    }
+
+    public function testMalformedHeadersNeitherCrashNorWarn(): void
+    {
+        $unterminated = $this->scanSource('Open', "namespace T;\n#[Broken(\nfinal class Open {}");
+        self::assertSame(['T\\Broken'], array_keys($unterminated->attributes));
+
+        $truncated = $this->scanSource('Truncated', "namespace T;\nfinal class Truncated extends Base");
+        self::assertSame('T\\Base', $truncated->parent);
+    }
+
+    public function testOnlyPhpFilesAreParsed(): void
+    {
+        $dir = $this->temporaryDirectory();
+        file_put_contents($dir . '/Real.php', "<?php\nnamespace T;\nfinal class Real {}\n");
+        file_put_contents($dir . '/notes.txt', "<?php\nnamespace T;\nfinal class Sneaky {}\n");
+        file_put_contents($dir . '/legacy.inc', "<?php\nnamespace T;\nfinal class Legacy {}\n");
+
+        self::assertSame(['T\\Real'], array_keys($this->scanner->scan([$dir])->getClasses()));
+        self::assertCount(0, $this->scanner->scan([$dir . '/notes.txt']));
+    }
+
+    public function testImportsAliasesGroupsAndRelativeNamesResolveLikePhp(): void
+    {
+        $meta = $this->scanSource('Ctl', <<<'PHP'
+            namespace App\Http;
+            use App\Attr\{Route, Guard as G};
+            use \Psr\Log\LoggerAwareInterface;
+            use function App\helper;
+            use Attribute;
+            $f = function () use ($x) {};
+            #[Route('/x'), G, Attribute, namespace\Local, Unimported, \Fq\Abs, attr\Nested]
+            final class Ctl extends Base\Controller implements LoggerAwareInterface, \Countable {}
+            PHP);
+
+        self::assertSame(
+            ['App\\Attr\\Route', 'App\\Attr\\Guard', 'Attribute', 'App\\Http\\Local', 'App\\Http\\Unimported', 'Fq\\Abs', 'App\\Http\\attr\\Nested'],
+            array_keys($meta->attributes),
+            'unimported names stay in the current namespace: classes never fall back to global',
+        );
+        self::assertSame('App\\Http\\Base\\Controller', $meta->parent);
+        self::assertSame(['Psr\\Log\\LoggerAwareInterface', 'Countable'], $meta->interfaces);
+    }
+
+    public function testAliasesAreCaseInsensitiveAndImportsResetPerNamespace(): void
+    {
+        $meta = $this->scanSource('Second', <<<'PHP'
+            namespace First;
+            use Vendor\Attr\Route;
+            namespace Second;
+            use Vendor\Attr\Route as Path;
+            #[path, Route]
+            final class Second {}
+            PHP);
+
+        self::assertSame(['Vendor\\Attr\\Route', 'Second\\Route'], array_keys($meta->attributes));
+    }
+
+    public function testMixedGroupsSkipFunctionAndConstImports(): void
+    {
+        $meta = $this->scanSource('Mixed', "namespace T;\nuse Lib\\{Model, function helper, const LIMIT};\n#[Model, helper]\nfinal class Mixed {}");
+
+        self::assertSame(['Lib\\Model', 'T\\helper'], array_keys($meta->attributes));
+    }
+
+    public function testTokenModeNeverInstantiatesAttributes(): void
+    {
+        $attribute = $this->fixture('AttributedClass')->getAttribute(self::fixtureClass('SampleAttribute'));
+
+        self::assertNotNull($attribute);
+        self::assertNull($attribute->instance, 'token mode never loads, so it never instantiates');
+    }
+
+    private function fixture(string $shortName): ClassMetadata
+    {
+        $meta = $this->scanner->scan([self::fixturePath($shortName . '.php')])->getClass(self::fixtureClass($shortName));
+        self::assertNotNull($meta, "Fixture {$shortName} was not discovered");
+
+        return $meta;
+    }
+
+    private function scanSource(string $shortName, string $body): ClassMetadata
+    {
+        $file = $this->temporaryDirectory() . "/{$shortName}.php";
+        file_put_contents($file, "<?php\n\ndeclare(strict_types=1);\n\n{$body}\n");
+
+        $classes = array_values($this->scanner->scan([$file])->getClasses());
+        self::assertCount(1, $classes, "Expected exactly one declaration in {$shortName}");
+
+        return $classes[0];
     }
 }

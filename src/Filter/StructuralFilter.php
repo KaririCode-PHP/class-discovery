@@ -9,6 +9,10 @@ use KaririCode\ClassDiscovery\Result\ClassMetadata;
 
 /**
  * Filters classes by structural characteristics (final, abstract, readonly, etc.).
+ *
+ * ```php
+ * $scanner->addFilter(new StructuralFilter(isFinal: true, isAbstract: false)); // null flags impose nothing
+ * ```
  */
 final readonly class StructuralFilter implements ClassFilter
 {
@@ -19,31 +23,30 @@ final readonly class StructuralFilter implements ClassFilter
         private ?bool $isInterface = null,
         private ?bool $isEnum = null,
         private ?bool $isTrait = null,
-    ) {
-    }
+    ) {}
 
-    #[\Override]
     public function accept(ClassMetadata $metadata): bool
     {
-        if ($this->isFinal !== null && $metadata->isFinal !== $this->isFinal) {
-            return false;
-        }
-        if ($this->isAbstract !== null && $metadata->isAbstract !== $this->isAbstract) {
-            return false;
-        }
-        if ($this->isReadonly !== null && $metadata->isReadonly !== $this->isReadonly) {
-            return false;
-        }
-        if ($this->isInterface !== null && $metadata->isInterface !== $this->isInterface) {
-            return false;
-        }
-        if ($this->isEnum !== null && $metadata->isEnum !== $this->isEnum) {
-            return false;
-        }
-        if ($this->isTrait !== null && $metadata->isTrait !== $this->isTrait) {
-            return false;
-        }
+        return array_all(
+            $this->constraints($metadata),
+            static fn(array $constraint): bool => $constraint[0] === null || $constraint[0] === $constraint[1],
+        );
+    }
 
-        return true;
+    /**
+     * Each configured flag paired with the class's actual value; a null flag imposes nothing.
+     *
+     * @return list<array{0: ?bool, 1: bool}>
+     */
+    private function constraints(ClassMetadata $metadata): array
+    {
+        return [
+            [$this->isFinal, $metadata->isFinal],
+            [$this->isAbstract, $metadata->isAbstract],
+            [$this->isReadonly, $metadata->isReadonly],
+            [$this->isInterface, $metadata->isInterface],
+            [$this->isEnum, $metadata->isEnum],
+            [$this->isTrait, $metadata->isTrait],
+        ];
     }
 }

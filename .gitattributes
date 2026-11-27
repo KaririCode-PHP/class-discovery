@@ -1,7 +1,5 @@
-# Normalize line endings across OSes
+# Line endings: LF everywhere (kept from 1.x)
 * text=auto
-
-# PHP files — LF only
 *.php text eol=lf
 *.json text eol=lf
 *.yml text eol=lf
@@ -9,10 +7,18 @@
 *.md text eol=lf
 *.xml text eol=lf
 *.neon text eol=lf
+*.json5 text eol=lf
 
-# Exclude from export
-.gitattributes export-ignore
-.gitignore export-ignore
-.github/ export-ignore
-tests/ export-ignore
-docs/ export-ignore
+# Not part of the installed package (composer dist)
+/.gitattributes         export-ignore
+/.gitignore             export-ignore
+/.github                export-ignore
+/.php-cs-fixer.dist.php export-ignore
+/composer.lock          export-ignore
+/docs                   export-ignore
+/infection.json5        export-ignore
+/phpstan.neon           export-ignore
+/phpunit.xml.dist       export-ignore
+/psalm.xml              export-ignore
+/tests                  export-ignore
+/tools                  export-ignore

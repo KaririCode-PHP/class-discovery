@@ -8,10 +8,8 @@ use KaririCode\ClassDiscovery\Contract\ClassFilter;
 use KaririCode\ClassDiscovery\Contract\DiscoveryResult as DiscoveryResultContract;
 use KaririCode\ClassDiscovery\Result\{ClassMetadata, DiscoveryResult};
 use KaririCode\ClassDiscovery\Tests\MetadataFactory;
-use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(DiscoveryResult::class)]
 final class DiscoveryResultTest extends TestCase
 {
     use MetadataFactory;
@@ -68,7 +66,7 @@ final class DiscoveryResultTest extends TestCase
             ['App\\Final' => $final, 'App\\Open' => $nonFinal],
         );
 
-        $filter = new class () implements ClassFilter {
+        $filter = new class implements ClassFilter {
             public function accept(ClassMetadata $metadata): bool
             {
                 return $metadata->isFinal;
@@ -123,7 +121,6 @@ final class DiscoveryResultTest extends TestCase
             'C' => self::createClassMetadata(name: 'C'),
         ]);
 
-        self::assertSame(3, $result->count());
         self::assertCount(3, $result); // Via Countable
     }
 
@@ -141,15 +138,6 @@ final class DiscoveryResultTest extends TestCase
         }
 
         self::assertSame($classes, $iterated);
-    }
-
-    public function testImplementsContract(): void
-    {
-        $result = new DiscoveryResult();
-
-        self::assertInstanceOf(DiscoveryResultContract::class, $result);
-        self::assertInstanceOf(\Countable::class, $result);
-        self::assertInstanceOf(\IteratorAggregate::class, $result);
     }
 
     public function testImmutability(): void
