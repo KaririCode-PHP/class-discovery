@@ -3,7 +3,7 @@
 All notable changes to `kariricode/class-discovery` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
-## [2.0.0] — 2026-10-27
+## [2.0.0] — 2026-11-27
 
 A major release: it adopts kariricode/contract 2.11.0 (Spec V4.3.3 §31), and changes exception types, error codes and the names token mode records. Upgrade notes: README, "Upgrading from 1.x".
 
@@ -89,6 +89,10 @@ A major release: it adopts kariricode/contract 2.11.0 (Spec V4.3.3 §31), and ch
 
 - `Integration\PSR11Integration` and `Enum\ScannerType` (see Breaking).
 - `devkit.php`, the `kcode` Composer scripts, and the `code-quality.yml` / `release.yml` workflows (merged into `ci.yml`).
+
+### Tooling
+
+- The toolchain comes from KaririCode Devkit, pinned in `devkit.php`, and runs the root configs (ADR-010); `require-dev` is gone. `composer.lock` is committed and holds the runtime only (kariricode/contract 2.12.0, psr/clock 1.0.0), and `composer security` also audits the toolchain. CI installs kcode 1.2.1 by version and SHA-256.
 
 ## [1.1.0] — 2026-03-04
 

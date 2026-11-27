@@ -444,6 +444,7 @@ src/
 ## Quality Gate
 
 ```bash
+kcode init         # the toolchain pinned in devkit.php (KaririCode Devkit, ADR-010)
 composer quality   # cs-check · phpstan · psalm · complexity · test · infection · security · sbom
 ```
 
@@ -496,7 +497,16 @@ Measured locally for this release; CI runs the same scripts on every push and ta
 git clone https://github.com/KaririCode-PHP/class-discovery.git
 cd class-discovery
 composer install
+kcode init         # install the toolchain pinned in devkit.php into .kcode/
 composer quality   # must pass before opening a PR
+```
+
+The tools come from [KaririCode Devkit](https://github.com/KaririCode-PHP/devkit) (`kcode`), which runs this repository's configs. Install it once (PHP 8.4+):
+
+```bash
+wget https://github.com/KaririCode-PHP/devkit/releases/latest/download/kcode.phar
+chmod +x kcode.phar
+sudo mv kcode.phar /usr/local/bin/kcode
 ```
 
 CI runs the same gate on every push and pull request; dependency changes in a PR also go through GitHub's dependency review. Security reports: see [SECURITY.md](SECURITY.md).

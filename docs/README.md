@@ -9,9 +9,10 @@
 | [ADR-004](adr/ADR-004-backed-enum-attribute-target.md) | Backed enum for `AttributeTarget` (E-003) |
 | [ADR-005](adr/ADR-005-composition-over-inheritance.md) | Scanners compose the token engine |
 | [ADR-006](adr/ADR-006-multi-tier-cache-strategy.md) | Memory → file cache; integrity and key identity (addendum) |
-| [ADR-007](adr/ADR-007-quality-toolchain-per-spec.md) | Quality toolchain per Spec V4.3.3 (replaces the Devkit pipeline of 1.x) |
+| [ADR-007](adr/ADR-007-quality-toolchain-per-spec.md) | Quality toolchain per Spec V4.3.3 (replaces the Devkit pipeline of 1.x; amended by ADR-010) |
 | [ADR-008](adr/ADR-008-metadata-dpos-without-serializable-data.md) | Metadata DPOs do not declare `SerializableData` |
 | [ADR-009](adr/ADR-009-parameter-budget-for-readonly-dpos.md) | Parameter budget and readonly DPO constructors |
+| [ADR-010](adr/ADR-010-toolchain-through-kcode.md) | Toolchain through KaririCode Devkit with the root configs (amends ADR-007) |
 | [Compliance (QD-V433)](quality/QD-V433-COMPLIANCE.md) | Gate status — PENDING until CI |
 | [Review log](TEST-REVIEW.md) | Findings, fixes and decisions, pass by pass |
 | [Security policy](../SECURITY.md) | Reporting, ASVS scope, threat model |
