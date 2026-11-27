@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+# kcode installs the toolchain pinned in devkit.php and runs the root
+# configs (ADR-010); kcode itself is pinned by version and SHA-256.
+env:
+  KCODE_VERSION: 1.2.1
+  KCODE_SHA256: 1bc43b06798b4e7fc1df341cc505f316549f0dd5efb9c8d80031415b0cdf3e3b
+
 jobs:
   quality-gate:
     name: Quality gate (Spec V4.3.3 §29.1)
@@ -25,6 +31,12 @@ jobs:
 
       - run: composer validate --strict
       - run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Install kcode ${{ env.KCODE_VERSION }}, checksum verified
+        run: |
+          curl -fsSLo kcode.phar "https://github.com/KaririCode-PHP/devkit/releases/download/v${KCODE_VERSION}/kcode.phar"
+          echo "${KCODE_SHA256}  kcode.phar" | sha256sum -c -
+          sudo install -m 0755 kcode.phar /usr/local/bin/kcode
+      - run: kcode init
       - run: composer cs-check
       - run: composer phpstan
       - run: composer psalm
@@ -48,7 +60,8 @@ jobs:
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
 
   # A release exists only for a v* tag whose gate passed. The notes are the
-  # CHANGELOG section of that version; a tag without one fails here.
+  # CHANGELOG section of that version; a tag without one fails here. A release
+  # created from the GitHub UI for the tag gets its notes replaced instead.
   release:
     name: GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
@@ -76,4 +89,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" --verify-tag --title "kariricode/class-discovery $TAG" --notes-file release-notes.md
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file release-notes.md
+          else
+            gh release create "$TAG" --verify-tag --title "kariricode/class-discovery $TAG" --notes-file release-notes.md
+          fi
