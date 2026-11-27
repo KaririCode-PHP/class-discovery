@@ -1,7 +1,8 @@
+# kcode installs the toolchain, extensions included, into .kcode/ (ADR-010).
 includes:
-    - vendor/tomasvotruba/cognitive-complexity/config/extension.neon
-    - vendor/phpstan/phpstan-phpunit/extension.neon
-    - vendor/phpstan/phpstan-phpunit/rules.neon
+    - .kcode/vendor/tomasvotruba/cognitive-complexity/config/extension.neon
+    - .kcode/vendor/phpstan/phpstan-phpunit/extension.neon
+    - .kcode/vendor/phpstan/phpstan-phpunit/rules.neon
 
 parameters:
     level: max
@@ -9,6 +10,10 @@ parameters:
     paths:
         - src
         - tests
+    # PHPUnit for the tests, psr/simple-cache for Integration\CacheBridge.
+    scanDirectories:
+        - .kcode/vendor/phpunit/phpunit/src
+        - .kcode/vendor/psr/simple-cache/src
     excludePaths:
         # Fixtures are inputs to the scanners (read as tokens, or loaded by ReflectionScanner);
         # they are test data, not code under analysis. Same for the reflection specimen.

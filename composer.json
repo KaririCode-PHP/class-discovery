@@ -27,17 +27,6 @@
         "kariricode/contract": "^2.11",
         "psr/clock": "^1.0"
     },
-    "require-dev": {
-        "friendsofphp/php-cs-fixer": "^3.64",
-        "infection/infection": "^0.29",
-        "nikic/php-parser": "^5.4",
-        "phpstan/phpstan": "^2.1",
-        "phpstan/phpstan-phpunit": "^2.0",
-        "phpunit/phpunit": "^11.5",
-        "psr/simple-cache": "^3.0",
-        "tomasvotruba/cognitive-complexity": "^1.0",
-        "vimeo/psalm": "^6.0"
-    },
     "suggest": {
         "kariricode/cache": "For PSR-16 cache integration via CacheBridge",
         "kariricode/configurator": "For environment-aware discovery configuration",
@@ -55,14 +44,17 @@
         }
     },
     "scripts": {
-        "test": "phpunit",
-        "test-conformance": "phpunit --testsuite Conformance",
-        "phpstan": "phpstan analyse --memory-limit=1G",
-        "psalm": "psalm --no-cache",
-        "cs-check": "php-cs-fixer fix --dry-run --diff",
-        "cs-fix": "php-cs-fixer fix",
+        "test": "kcode test",
+        "test-conformance": "kcode test --testsuite=Conformance",
+        "phpstan": "kcode run phpstan analyse --memory-limit=1G --no-progress",
+        "psalm": "kcode run psalm --no-cache",
+        "cs-check": "kcode cs:fix --check",
+        "cs-fix": "kcode cs:fix",
         "complexity": "php tools/complexity-budget.php src",
-        "security": "composer audit --locked",
+        "security": [
+            "@composer audit --locked",
+            "@composer audit --locked --working-dir=.kcode"
+        ],
         "quality": [
             "@cs-check",
             "@phpstan",
@@ -73,7 +65,7 @@
             "@security",
             "@sbom"
         ],
-        "infection": "infection --threads=max",
+        "infection": "kcode run infection --threads=max",
         "sbom": "php tools/sbom.php"
     },
     "scripts-descriptions": {
@@ -107,9 +99,6 @@
     "prefer-stable": true,
     "config": {
         "sort-packages": true,
-        "optimize-autoloader": true,
-        "allow-plugins": {
-            "infection/extension-installer": false
-        }
+        "optimize-autoloader": true
     }
 }

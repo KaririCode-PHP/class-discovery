@@ -21,6 +21,8 @@ if (!is_file($root . '/composer.lock')) {
 
 $lock = $read('composer.lock');
 $composer = $read('composer.json');
+// The toolchain is installed by kcode (ADR-010); its lock lists the development components.
+$toolchain = is_file($root . '/.kcode/composer.lock') ? $read('.kcode/composer.lock') : [];
 
 $licenses = static fn(array $package): array => array_map(
     static fn(string $license): array => preg_match('/^[A-Za-z0-9.+-]+$/', $license) === 1
@@ -61,6 +63,7 @@ $bom = [
     'components' => [
         ...array_map(static fn(array $p): array => $component($p, 'required'), $lock['packages'] ?? []),
         ...array_map(static fn(array $p): array => $component($p, 'excluded'), $lock['packages-dev'] ?? []),
+        ...array_map(static fn(array $p): array => $component($p, 'excluded'), $toolchain['packages'] ?? []),
     ],
 ];
 
